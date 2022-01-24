@@ -8,7 +8,6 @@ use fvm_shared::version::NetworkVersion;
 use fvm_shared::ActorID;
 use wasmtime::{Engine, Module};
 
-use crate::externs::Externs;
 use crate::gas::PriceList;
 use crate::kernel::Result;
 use crate::state_tree::{ActorState, StateTree};
@@ -17,6 +16,7 @@ use crate::Config;
 mod default;
 
 pub use default::DefaultMachine;
+use fvm_shared::externs::Externs;
 
 mod boxed;
 

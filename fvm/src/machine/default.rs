@@ -4,6 +4,7 @@ use fvm_shared::address::Address;
 use fvm_shared::blockstore::{Blockstore, Buffered};
 use fvm_shared::clock::ChainEpoch;
 use fvm_shared::error::ExitCode;
+use fvm_shared::externs::Externs;
 use fvm_shared::sys::TokenAmount;
 use fvm_shared::version::NetworkVersion;
 use fvm_shared::ActorID;
@@ -13,7 +14,6 @@ use wasmtime::{Engine, Module};
 
 use super::{Machine, MachineContext};
 use crate::blockstore::BufferedBlockstore;
-use crate::externs::Externs;
 use crate::gas::price_list_by_epoch;
 use crate::init_actor::{State, INIT_ACTOR_ADDR};
 use crate::kernel::{ClassifyResult, Context as _, Result};
