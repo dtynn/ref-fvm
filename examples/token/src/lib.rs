@@ -58,6 +58,7 @@
 //! meant for illustration and test purposes.
 //!
 
+use actors_runtime::Abortable;
 use cid::multihash::{Code, MultihashDigest};
 use cid::Cid;
 use fvm_sdk as sdk;
@@ -70,6 +71,7 @@ use fvm_shared::blockstore::CborStore;
 use fvm_shared::econ::TokenAmount;
 use fvm_shared::encoding::tuple::*;
 use fvm_shared::encoding::{Cbor, RawBytes, DAG_CBOR};
+use fvm_shared::error::ExitCode;
 use fvm_shared::ActorID;
 use ipld_hamt::Hamt;
 
@@ -80,6 +82,15 @@ macro_rules! abort {
             fvm_shared::error::ExitCode::$code as u32,
             Some(format!($msg, $($ex,)*).as_str()),
         )
+    };
+
+    ($ex:expr) => {
+        match $ex {
+            Ok(res) => res,
+            Err(e) => {
+                fvm_sdk::vm::abort(e.exit_code() as u32, Some(e.msg()));
+            }
+        }
     };
 }
 
@@ -115,17 +126,21 @@ pub struct State {
 #[no_mangle]
 pub fn invoke(params_id: u32) -> u32 {
     // First, load the current state root.
-    let root = match sdk::sself::root() {
-        Ok(root) => root,
-        Err(err) => abort!(ErrIllegalState, "failed to get root: {}", err),
-    };
+    let root = abort!(sdk::sself::root().or_abort(ExitCode::ErrIllegalState, "failed to get root"));
 
     // Load the actor state from the state tree.
-    let state = match Blockstore.get_cbor::<State>(&root) {
-        Ok(Some(state)) => state,
-        Ok(None) => abort!(ErrIllegalState, "state does not exist"),
-        Err(err) => abort!(ErrIllegalState, "failed to get state: {}", err),
+    let state = match abort!(Blockstore
+        .get_cbor::<State>(&root)
+        .or_abort(ExitCode::ErrIllegalState, "failed to get state"))
+    {
+        Some(st) => st,
+        None => abort!(ErrIllegalState, "state does not exist"),
     };
+    // let state = match Blockstore.get_cbor::<State>(&root) {
+    //     Ok(Some(state)) => state,
+    //     Ok(None) => abort!(ErrIllegalState, "state does not exist"),
+    //     Err(err) => abort!(ErrIllegalState, "failed to get state: {}", err),
+    // };
 
     // Conduct method dispatch. Handle input parameters and return data.
     let ret: Option<RawBytes> = match sdk::message::method_number() {

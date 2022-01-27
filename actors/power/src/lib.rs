@@ -5,9 +5,9 @@ use std::convert::TryInto;
 
 use actors_runtime::runtime::{ActorCode, Runtime};
 use actors_runtime::{
-    actor_error, make_map_with_root_and_bitwidth, wasm_trampoline, ActorDowncast, ActorError,
-    Multimap, CALLER_TYPES_SIGNABLE, CRON_ACTOR_ADDR, INIT_ACTOR_ADDR, MINER_ACTOR_CODE_ID,
-    REWARD_ACTOR_ADDR, SYSTEM_ACTOR_ADDR,
+    actor_error, make_map_with_root_and_bitwidth, wasm_trampoline, Abortable, ActorDowncast,
+    ActorError, Multimap, CALLER_TYPES_SIGNABLE, CRON_ACTOR_ADDR, INIT_ACTOR_ADDR,
+    MINER_ACTOR_CODE_ID, REWARD_ACTOR_ADDR, SYSTEM_ACTOR_ADDR,
 };
 use ahash::AHashSet;
 use anyhow::anyhow;
@@ -88,12 +88,10 @@ impl Actor {
     {
         rt.validate_immediate_caller_is(std::iter::once(&*SYSTEM_ACTOR_ADDR))?;
 
-        let st = State::new(rt.store()).map_err(|e| {
-            e.downcast_default(
-                ExitCode::ErrIllegalState,
-                "Failed to create power actor state",
-            )
-        })?;
+        let st = State::new(rt.store()).or_abort(
+            ExitCode::ErrIllegalState,
+            "Failed to create power actor state",
+        )?;
         rt.create(&st)?;
         Ok(())
     }

@@ -11,6 +11,9 @@ fvm_shared = { path = "../../shared" }
 ipld_hamt = { path = "../../ipld/hamt" }
 serde = { version = "1.0", features = ["derive"] }
 
+# just for showcases, should move the `Abortable` sugar into sdk
+actors-runtime = { path = "../../actors/runtime" }
+
 [dev-dependencies]
 fvm = { path = "../../fvm", features = ["custom_actors"] }
 libsecp256k1 = { version = "0.7" }
