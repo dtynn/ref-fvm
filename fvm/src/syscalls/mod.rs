@@ -65,6 +65,7 @@ pub fn bind_syscalls(
     linker.bind("self", "current_balance", sself::current_balance)?;
     linker.bind("self", "self_destruct", sself::self_destruct)?;
 
+    linker.bind("message", "originator", message::originator)?;
     linker.bind("message", "caller", message::caller)?;
     linker.bind("message", "receiver", message::receiver)?;
     linker.bind("message", "method_number", message::method_number)?;

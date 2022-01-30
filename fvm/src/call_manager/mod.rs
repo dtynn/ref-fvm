@@ -21,7 +21,13 @@ pub const NO_DATA_BLOCK_ID: u32 = 0;
 pub trait CallManager: 'static {
     type Machine: Machine;
 
-    fn new(machine: Self::Machine, gas_limit: i64, origin: Address, nonce: u64) -> Self;
+    fn new(
+        machine: Self::Machine,
+        gas_limit: i64,
+        origin: Address,
+        origin_actor: ActorID,
+        nonce: u64,
+    ) -> Self;
 
     /// Send a message.
     fn send<K: Kernel<CallManager = Self>>(
@@ -52,8 +58,11 @@ pub trait CallManager: 'static {
     /// Returns a mutable reference to the gas tracker.
     fn gas_tracker_mut(&mut self) -> &mut GasTracker;
 
-    /// Getter for origin actor.
+    /// Getter for origin actor address.
     fn origin(&self) -> Address;
+
+    /// Getter for origin actor id.
+    fn origin_actor(&self) -> ActorID;
 
     /// Getter for message nonce.
     fn nonce(&self) -> u64;

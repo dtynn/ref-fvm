@@ -43,6 +43,7 @@ pub struct InnerDefaultCallManager<M> {
     gas_tracker: GasTracker,
     /// The original sender of the chain message that initiated this call stack.
     origin: Address,
+    origin_actor: ActorID,
     /// The nonce of the chain message that initiated this call stack.
     nonce: u64,
     /// Number of actors created in this call stack.
@@ -75,11 +76,12 @@ where
 {
     type Machine = M;
 
-    fn new(machine: M, gas_limit: i64, origin: Address, nonce: u64) -> Self {
+    fn new(machine: M, gas_limit: i64, origin: Address, origin_actor: ActorID, nonce: u64) -> Self {
         DefaultCallManager(Some(InnerDefaultCallManager {
             machine,
             gas_tracker: GasTracker::new(gas_limit, 0),
             origin,
+            origin_actor,
             nonce,
             num_actors_created: 0,
             call_stack_depth: 0,
@@ -152,6 +154,10 @@ where
 
     fn origin(&self) -> Address {
         self.origin
+    }
+
+    fn origin_actor(&self) -> ActorID {
+        self.origin_actor
     }
 
     fn nonce(&self) -> u64 {

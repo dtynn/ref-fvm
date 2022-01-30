@@ -165,8 +165,14 @@ where
 {
     type Machine = C::Machine;
 
-    fn new(machine: Self::Machine, gas_limit: i64, origin: Address, nonce: u64) -> Self {
-        TestCallManager(C::new(machine, gas_limit, origin, nonce))
+    fn new(
+        machine: Self::Machine,
+        gas_limit: i64,
+        origin: Address,
+        origin_actor: ActorID,
+        nonce: u64,
+    ) -> Self {
+        TestCallManager(C::new(machine, gas_limit, origin, origin_actor, nonce))
     }
 
     fn send<K: Kernel<CallManager = Self>>(
@@ -221,6 +227,10 @@ where
 
     fn origin(&self) -> Address {
         self.0.origin()
+    }
+
+    fn origin_actor(&self) -> ActorID {
+        self.0.origin_actor()
     }
 
     fn nonce(&self) -> u64 {
@@ -460,6 +470,10 @@ where
     C: CallManager<Machine = TestMachine<M>>,
     K: Kernel<CallManager = TestCallManager<C>>,
 {
+    fn msg_originator(&self) -> ActorID {
+        self.0.msg_originator()
+    }
+
     fn msg_caller(&self) -> ActorID {
         self.0.msg_caller()
     }

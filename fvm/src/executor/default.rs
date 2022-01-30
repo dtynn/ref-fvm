@@ -65,7 +65,8 @@ where
 
         // Apply the message.
         let (res, gas_used, mut backtrace) = self.map_machine(|machine| {
-            let mut cm = K::CallManager::new(machine, msg.gas_limit, msg.from, msg.sequence);
+            let mut cm =
+                K::CallManager::new(machine, msg.gas_limit, msg.from, sender_id, msg.sequence);
             // This error is fatal because it should have already been acounted for inside
             // preflight_message.
             if let Err(e) = cm.charge_gas(inclusion_cost) {

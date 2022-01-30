@@ -338,6 +338,10 @@ impl<C> MessageOps for DefaultKernel<C>
 where
     C: CallManager,
 {
+    fn msg_originator(&self) -> ActorID {
+        self.call_manager.origin_actor()
+    }
+
     fn msg_caller(&self) -> ActorID {
         self.caller
     }

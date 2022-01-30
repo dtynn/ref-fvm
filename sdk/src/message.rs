@@ -9,6 +9,12 @@ use crate::{sys, vm, SyscallResult};
 /// BlockID representing nil parameters or return data.
 pub const NO_DATA_BLOCK_ID: u32 = 0;
 
+/// Returns the ID address of the originator.
+#[inline(always)]
+pub fn originator() -> ActorID {
+    unsafe { sys::message::originator().expect("failed to lookup originator ID") }
+}
+
 /// Returns the ID address of the caller.
 #[inline(always)]
 pub fn caller() -> ActorID {

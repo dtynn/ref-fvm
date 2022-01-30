@@ -64,6 +64,7 @@ pub trait NetworkOps {
 
 /// Accessors to query attributes of the incoming message.
 pub trait MessageOps {
+    fn msg_originator(&self) -> ActorID;
     fn msg_caller(&self) -> ActorID;
     fn msg_receiver(&self) -> ActorID;
     fn msg_method_number(&self) -> MethodNum;

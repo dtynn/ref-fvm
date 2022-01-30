@@ -1,6 +1,9 @@
 super::fvm_syscalls! {
     module = "message";
 
+    /// Returns the originator's actor ID.
+    pub fn originator() -> Result<u64>;
+
     /// Returns the caller's actor ID.
     pub fn caller() -> Result<u64>;
 
