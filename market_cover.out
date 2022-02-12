@@ -1,0 +1,3093 @@
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/deal.rs:
+    1|       |// Copyright 2019-2022 ChainSafe Systems
+    2|       |// SPDX-License-Identifier: Apache-2.0, MIT
+    3|       |
+    4|       |use actors_runtime::DealWeight;
+    5|       |use cid::{Cid, Version};
+    6|       |use fvm_shared::address::Address;
+    7|       |use fvm_shared::bigint::bigint_ser;
+    8|       |use fvm_shared::clock::ChainEpoch;
+    9|       |use fvm_shared::commcid::{FIL_COMMITMENT_UNSEALED, SHA2_256_TRUNC254_PADDED};
+   10|       |use fvm_shared::crypto::signature::Signature;
+   11|       |use fvm_shared::econ::TokenAmount;
+   12|       |use fvm_shared::encoding::tuple::*;
+   13|       |use fvm_shared::encoding::Cbor;
+   14|       |use fvm_shared::piece::PaddedPieceSize;
+   15|       |
+   16|       |/// Cid prefix for piece Cids
+   17|      0|pub fn is_piece_cid(c: &Cid) -> bool {
+   18|      0|    // TODO: Move FIL_COMMITMENT etc, into a better place
+   19|      0|    c.version() == Version::V1
+   20|      0|        && c.codec() == FIL_COMMITMENT_UNSEALED
+   21|      0|        && c.hash().code() == SHA2_256_TRUNC254_PADDED
+   22|      0|        && c.hash().size() == 32
+   23|      0|}
+   24|       |
+   25|       |/// Note: Deal Collateral is only released and returned to clients and miners
+   26|       |/// when the storage deal stops counting towards power. In the current iteration,
+   27|       |/// it will be released when the sector containing the storage deals expires,
+   28|       |/// even though some storage deals can expire earlier than the sector does.
+   29|       |/// Collaterals are denominated in PerEpoch to incur a cost for self dealing or
+   30|       |/// minimal deals that last for a long time.
+   31|       |/// Note: ClientCollateralPerEpoch may not be needed and removed pending future confirmation.
+   32|       |/// There will be a Minimum value for both client and provider deal collateral.
+   33|      0|#[derive(Clone, Debug, PartialEq, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_12DealProposalNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2eqB7_
+  ------------------
+  | Unexecuted instantiation: _RNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_12DealProposalNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2neB7_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvNvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBa_5InnerB1c_9serializeNtB5_s_15___SerializeWithB1c_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBi_
+  ------------------
+  | Unexecuted instantiation: _RINvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_12DealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_12DealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB17_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_12DealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB1a_9serializeNtB3_15___SerializeWithB1a_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXs0_NvXNvNvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBh_12DealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBb_5InnerB1d_9serializeNtB6_s0_15___SerializeWithB1d_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBj_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3h_4read9SliceReadEEs_0Bi_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3h_4read9SliceReadEEs0_0Bi_
+  ------------------
+  | Unexecuted instantiation: _RINvXs0_NvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBk_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBe_5InnerB1g_11deserializeNtB9_9___VisitorNtB1i_7Visitor9visit_seqNtB6_s0_17___DeserializeWithB1g_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB45_4read9SliceReadEEBm_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBd_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB19_11deserializeNtB2_9___VisitorNtB1b_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3h_4read9SliceReadEE0Bi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBh_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB1d_11deserializeNtB6_9___VisitorNtB1f_7Visitor9visit_seqNtB3_17___DeserializeWithB1d_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3Z_4read9SliceReadEEBj_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3h_4read9SliceReadEEs_0Bi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1a_11deserializeNtB3_9___VisitorNtB1c_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3f_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBj_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBd_5InnerB1f_11deserializeNtB8_9___VisitorNtB1h_7Visitor9visit_seqNtB5_s_17___DeserializeWithB1f_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB43_4read9SliceReadEEBl_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1a_11deserializeNtB3_9___VisitorNtB1c_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3f_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB1Z_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3h_4read9SliceReadEEs0_0Bi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB17_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3h_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBg_12DealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1c_11deserializeNtB5_9___VisitorNtB1e_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3h_4read9SliceReadEE0Bi_
+  ------------------
+   34|       |pub struct DealProposal {
+   35|       |    pub piece_cid: Cid,
+   36|       |    pub piece_size: PaddedPieceSize,
+   37|       |    pub verified_deal: bool,
+   38|       |    pub client: Address,
+   39|       |    pub provider: Address,
+   40|       |
+   41|       |    /// Arbitrary client chosen label to apply to the deal
+   42|       |    // ! This is the field that requires unsafe unchecked utf8 deserialization
+   43|       |    pub label: String,
+   44|       |
+   45|       |    // Nominal start epoch. Deal payment is linear between StartEpoch and EndEpoch,
+   46|       |    // with total amount StoragePricePerEpoch * (EndEpoch - StartEpoch).
+   47|       |    // Storage deal must appear in a sealed (proven) sector no later than StartEpoch,
+   48|       |    // otherwise it is invalid.
+   49|       |    pub start_epoch: ChainEpoch,
+   50|       |    pub end_epoch: ChainEpoch,
+   51|       |    #[serde(with = "bigint_ser")]
+   52|       |    pub storage_price_per_epoch: TokenAmount,
+   53|       |
+   54|       |    #[serde(with = "bigint_ser")]
+   55|       |    pub provider_collateral: TokenAmount,
+   56|       |    #[serde(with = "bigint_ser")]
+   57|       |    pub client_collateral: TokenAmount,
+   58|       |}
+   59|       |
+   60|       |impl Cbor for DealProposal {}
+   61|       |
+   62|       |impl DealProposal {
+   63|      0|    pub fn duration(&self) -> ChainEpoch {
+   64|      0|        self.end_epoch - self.start_epoch
+   65|      0|    }
+   66|       |    /// Computes weight for a deal proposal, which is a function of its size and duration.
+   67|      0|    pub fn weight(&self) -> DealWeight {
+   68|      0|        DealWeight::from(self.duration()) * self.piece_size.0
+   69|      0|    }
+   70|      0|    pub fn total_storage_fee(&self) -> TokenAmount {
+   71|      0|        self.storage_price_per_epoch.clone() * self.duration() as u64
+   72|      0|    }
+   73|      0|    pub fn client_balance_requirement(&self) -> TokenAmount {
+   74|      0|        &self.client_collateral + self.total_storage_fee()
+   75|      0|    }
+   76|      0|    pub fn provider_balance_requirement(&self) -> &TokenAmount {
+   77|      0|        &self.provider_collateral
+   78|      0|    }
+   79|       |}
+   80|       |
+   81|       |/// ClientDealProposal is a DealProposal signed by a client
+   82|      0|#[derive(Clone, Debug, PartialEq, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_18ClientDealProposalNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2neB7_
+  ------------------
+  | Unexecuted instantiation: _RNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_18ClientDealProposalNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2eqB7_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsb_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1d_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsb_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1g_11deserializeNtB3_9___VisitorNtB1i_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3l_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB25_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1g_11deserializeNtB3_9___VisitorNtB1i_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3l_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBd_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1f_11deserializeNtB2_9___VisitorNtB1h_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_18ClientDealProposalNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1d_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3n_4read9SliceReadEEEBd_
+  ------------------
+   83|       |pub struct ClientDealProposal {
+   84|       |    pub proposal: DealProposal,
+   85|       |    pub client_signature: Signature,
+   86|       |}
+   87|       |
+   88|       |impl Cbor for ClientDealProposal {}
+   89|       |
+   90|      0|#[derive(Clone, Debug, PartialEq, Copy, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNvXsg_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_9DealStateNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2eqB7_
+  ------------------
+  | Unexecuted instantiation: _RNvXsg_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB5_9DealStateNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2neB7_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_9DealStateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB13_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_9DealStateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsj_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBb_9DealStateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB13_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3d_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsj_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_9DealStateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB16_11deserializeNtB3_9___VisitorNtB18_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3b_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXsj_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtB6_9DealStateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB1V_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsj_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBd_9DealStateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB15_11deserializeNtB2_9___VisitorNtB17_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsj_NtCsh0AsSxgjHCW_16fvm_actor_market4dealNtBe_9DealStateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB16_11deserializeNtB3_9___VisitorNtB18_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3b_4read9SliceReadEEBg_
+  ------------------
+   91|       |pub struct DealState {
+   92|       |    pub sector_start_epoch: ChainEpoch, // -1 if not yet included in proven sector
+   93|       |    pub last_updated_epoch: ChainEpoch, // -1 if deal state never updated
+   94|       |    pub slash_epoch: ChainEpoch,        // -1 if deal never slashed
+   95|       |}
+
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/ext.rs:
+    1|       |use fvm_shared::address::Address;
+    2|       |use fvm_shared::bigint::bigint_ser;
+    3|       |use fvm_shared::econ::TokenAmount;
+    4|       |use fvm_shared::encoding::tuple::*;
+    5|       |use fvm_shared::sector::StoragePower;
+    6|       |use fvm_shared::smooth::FilterEstimate;
+    7|       |
+    8|       |pub mod miner {
+    9|       |    use super::*;
+   10|       |
+   11|       |    pub const CONTROL_ADDRESSES_METHOD: u64 = 2;
+   12|       |
+   13|      2|    #[derive(Serialize_tuple, Deserialize_tuple)]
+                           ^0  ^0        ^0
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtB8_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1u_9serializepEBc_
+  ------------------
+  | Unexecuted instantiation: _RINvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtB3_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB7_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtBd_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1z_11deserializeNtB3_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3E_4read9SliceReadEEBh_
+  ------------------
+  | _RINvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtBa_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1w_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3G_4read9SliceReadEEEBe_:
+  |   13|      1|    #[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtBc_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1y_11deserializeNtB2_9___VisitorNtB1A_7Visitor9expecting
+  ------------------
+  | _RINvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtB5_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2o_4read9SliceReadEEB9_:
+  |   13|      1|    #[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5minerNtBd_31GetControlAddressesReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1z_11deserializeNtB3_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3E_4read9SliceReadEEBh_:
+  |   13|      1|    #[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+   14|       |    pub struct GetControlAddressesReturnParams {
+   15|       |        pub owner: Address,
+   16|       |        pub worker: Address,
+   17|       |        pub control_addresses: Vec<Address>,
+   18|       |    }
+   19|       |}
+   20|       |
+   21|       |pub mod verifreg {
+   22|       |    use super::*;
+   23|       |
+   24|       |    // based on fvm_actor_verifreg
+   25|       |    pub const USE_BYTES_METHOD: u64 = 5;
+   26|       |    pub const RESTORE_BYTES_METHOD: u64 = 6;
+   27|       |    pub type UseBytesParams = BytesParams;
+   28|       |    pub type RestoreBytesParams = BytesParams;
+   29|       |
+   30|      0|    #[derive(Clone, Debug, PartialEq, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNvXs1_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtB5_11BytesParamsNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2eqB9_
+  ------------------
+  | Unexecuted instantiation: _RNvXs1_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtB5_11BytesParamsNtNtCsgcvJ1Nqe0DH_4core3cmp9PartialEq2neB9_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs2_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBb_11BytesParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1g_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBf_
+  ------------------
+  | Unexecuted instantiation: _RINvXs2_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtB6_11BytesParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBa_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs2_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBe_11BytesParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB1j_9serializeNtB3_15___SerializeWithB1j_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvXNvNvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBh_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB1m_11deserializeNtB6_9___VisitorNtB1o_7Visitor9visit_seqNtB3_17___DeserializeWithB1m_11deserializepEBl_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBb_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1g_11deserializepEBf_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBe_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1j_11deserializeNtB3_9___VisitorNtB1l_7Visitor9visit_seqpEBi_
+  ------------------
+  | Unexecuted instantiation: _RINvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtB6_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEBa_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBd_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1i_11deserializeNtB2_9___VisitorNtB1k_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs3_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext8verifregNtBg_11BytesParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1l_11deserializeNtB5_9___VisitorNtB1n_7Visitor9visit_seqpE0Bk_
+  ------------------
+   31|       |    pub struct BytesParams {
+   32|       |        /// Address of verified client.
+   33|       |        pub address: Address,
+   34|       |        /// Number of bytes to use.
+   35|       |        #[serde(with = "bigint_ser")]
+   36|       |        pub deal_size: StoragePower,
+   37|       |    }
+   38|       |}
+   39|       |
+   40|       |pub mod reward {
+   41|       |    pub const THIS_EPOCH_REWARD_METHOD: u64 = 3;
+   42|       |}
+   43|       |
+   44|       |pub mod power {
+   45|       |    use super::*;
+   46|       |    pub const CURRENT_TOTAL_POWER_METHOD: u64 = 9;
+   47|       |
+   48|      0|    #[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBb_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB1v_9serializeNtB3_15___SerializeWithB1v_9serializepEBf_
+  ------------------
+  | Unexecuted instantiation: _RINvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtB3_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB7_
+  ------------------
+  | Unexecuted instantiation: _RINvXs0_NvXNvNvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBe_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBb_5InnerB1y_9serializeNtB6_s0_15___SerializeWithB1y_9serializepEBi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtB8_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1s_9serializepEBc_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvNvXNtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBd_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBa_5InnerB1x_9serializeNtB5_s_15___SerializeWithB1x_9serializepEBh_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBg_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB1A_11deserializeNtB6_9___VisitorNtB1C_7Visitor9visit_seqNtB3_17___DeserializeWithB1A_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB4m_4read9SliceReadEEBk_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3E_4read9SliceReadEEs0_0Bj_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3E_4read9SliceReadEEs_0Bj_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBc_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1w_11deserializeNtB2_9___VisitorNtB1y_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBi_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBd_5InnerB1C_11deserializeNtB8_9___VisitorNtB1E_7Visitor9visit_seqNtB5_s_17___DeserializeWithB1C_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB4q_4read9SliceReadEEBm_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3E_4read9SliceReadEEs0_0Bj_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBd_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1x_11deserializeNtB3_9___VisitorNtB1z_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3C_4read9SliceReadEEBh_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3E_4read9SliceReadEEs_0Bj_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3E_4read9SliceReadEE0Bj_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBd_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1x_11deserializeNtB3_9___VisitorNtB1z_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3C_4read9SliceReadEEBh_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtB5_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2m_4read9SliceReadEEB9_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBf_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1z_11deserializeNtB5_9___VisitorNtB1B_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3E_4read9SliceReadEE0Bj_
+  ------------------
+  | Unexecuted instantiation: _RINvXs0_NvXNvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBj_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBe_5InnerB1D_11deserializeNtB9_9___VisitorNtB1F_7Visitor9visit_seqNtB6_s0_17___DeserializeWithB1D_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB4s_4read9SliceReadEEBn_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs_NtNtCsh0AsSxgjHCW_16fvm_actor_market3ext5powerNtBa_29CurrentTotalPowerReturnParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1u_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3E_4read9SliceReadEEEBe_
+  ------------------
+   49|       |    pub struct CurrentTotalPowerReturnParams {
+   50|       |        #[serde(with = "bigint_ser")]
+   51|       |        pub raw_byte_power: StoragePower,
+   52|       |        #[serde(with = "bigint_ser")]
+   53|       |        pub quality_adj_power: StoragePower,
+   54|       |        #[serde(with = "bigint_ser")]
+   55|       |        pub pledge_collateral: TokenAmount,
+   56|       |        pub quality_adj_power_smoothed: FilterEstimate,
+   57|       |    }
+   58|       |}
+
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/policy.rs:
+    1|       |// Copyright 2019-2022 ChainSafe Systems
+    2|       |// SPDX-License-Identifier: Apache-2.0, MIT
+    3|       |
+    4|       |use std::cmp::max;
+    5|       |
+    6|       |use actors_runtime::network::EPOCHS_IN_DAY;
+    7|       |use actors_runtime::DealWeight;
+    8|       |use fvm_shared::bigint::Integer;
+    9|       |use fvm_shared::clock::ChainEpoch;
+   10|       |use fvm_shared::econ::TokenAmount;
+   11|       |use fvm_shared::piece::PaddedPieceSize;
+   12|       |use fvm_shared::sector::StoragePower;
+   13|       |use fvm_shared::TOTAL_FILECOIN;
+   14|       |use num_traits::Zero;
+   15|       |
+   16|       |use super::deal::DealProposal;
+   17|       |
+   18|       |/// DealUpdatesInterval is the number of blocks between payouts for deals
+   19|       |pub const DEAL_UPDATES_INTERVAL: i64 = EPOCHS_IN_DAY;
+   20|       |
+   21|       |/// Numerator of the percentage of normalized cirulating
+   22|       |/// supply that must be covered by provider collateral
+   23|       |const PROV_COLLATERAL_PERCENT_SUPPLY_NUM: i64 = 1;
+   24|       |
+   25|       |/// Denominator of the percentage of normalized cirulating
+   26|       |/// supply that must be covered by provider collateral
+   27|       |const PROV_COLLATERAL_PERCENT_SUPPLY_DENOM: i64 = 100;
+   28|       |
+   29|       |/// Maximum length of a deal label.
+   30|       |pub(super) const DEAL_MAX_LABEL_SIZE: usize = 256;
+   31|       |
+   32|       |/// Bounds (inclusive) on deal duration.
+   33|      0|pub(super) fn deal_duration_bounds(_size: PaddedPieceSize) -> (ChainEpoch, ChainEpoch) {
+   34|      0|    (180 * EPOCHS_IN_DAY, 540 * EPOCHS_IN_DAY)
+   35|      0|}
+   36|       |
+   37|      0|pub(super) fn deal_price_per_epoch_bounds(
+   38|      0|    _size: PaddedPieceSize,
+   39|      0|    _duration: ChainEpoch,
+   40|      0|) -> (TokenAmount, &'static TokenAmount) {
+   41|      0|    (0.into(), &TOTAL_FILECOIN)
+   42|      0|}
+   43|       |
+   44|      0|pub(super) fn deal_provider_collateral_bounds(
+   45|      0|    size: PaddedPieceSize,
+   46|      0|    network_raw_power: &StoragePower,
+   47|      0|    baseline_power: &StoragePower,
+   48|      0|    network_circulating_supply: &TokenAmount,
+   49|      0|) -> (TokenAmount, TokenAmount) {
+   50|      0|    // minimumProviderCollateral = ProviderCollateralSupplyTarget * normalizedCirculatingSupply
+   51|      0|    // normalizedCirculatingSupply = networkCirculatingSupply * dealPowerShare
+   52|      0|    // dealPowerShare = dealRawPower / max(BaselinePower(t), NetworkRawPower(t), dealRawPower)
+   53|      0|
+   54|      0|    let lock_target_num = network_circulating_supply * PROV_COLLATERAL_PERCENT_SUPPLY_NUM;
+   55|      0|    let power_share_num = TokenAmount::from(size.0);
+   56|      0|    let power_share_denom = max(max(network_raw_power, baseline_power), &power_share_num).clone();
+   57|      0|
+   58|      0|    let num: TokenAmount = power_share_num * lock_target_num;
+   59|      0|    let denom: TokenAmount = power_share_denom * PROV_COLLATERAL_PERCENT_SUPPLY_DENOM;
+   60|      0|    ((num.div_floor(&denom)), TOTAL_FILECOIN.clone())
+   61|      0|}
+   62|       |
+   63|      0|pub(super) fn deal_client_collateral_bounds(
+   64|      0|    _: PaddedPieceSize,
+   65|      0|    _: ChainEpoch,
+   66|      0|) -> (TokenAmount, TokenAmount) {
+   67|      0|    (TokenAmount::zero(), TOTAL_FILECOIN.clone()) // PARAM_FINISH
+   68|      0|}
+   69|       |
+   70|       |/// Penalty to provider deal collateral if the deadline expires before sector commitment.
+   71|      0|pub(super) fn collateral_penalty_for_deal_activation_missed(
+   72|      0|    provider_collateral: TokenAmount,
+   73|      0|) -> TokenAmount {
+   74|      0|    provider_collateral
+   75|      0|}
+   76|       |
+   77|       |/// Computes the weight for a deal proposal, which is a function of its size and duration.
+   78|      0|pub(super) fn deal_weight(proposal: &DealProposal) -> DealWeight {
+   79|      0|    let deal_duration = DealWeight::from(proposal.duration());
+   80|      0|    deal_duration * proposal.piece_size.0
+   81|      0|}
+
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/state.rs:
+    1|       |// Copyright 2019-2022 ChainSafe Systems
+    2|       |// SPDX-License-Identifier: Apache-2.0, MIT
+    3|       |
+    4|       |use actors_runtime::{
+    5|       |    actor_error, make_empty_map, ActorDowncast, ActorError, Array, BalanceTable, Set, SetMultimap,
+    6|       |};
+    7|       |use anyhow::anyhow;
+    8|       |use cid::Cid;
+    9|       |use fvm_shared::address::Address;
+   10|       |use fvm_shared::bigint::bigint_ser;
+   11|       |use fvm_shared::blockstore::Blockstore;
+   12|       |use fvm_shared::clock::{ChainEpoch, EPOCH_UNDEFINED};
+   13|       |use fvm_shared::deal::DealID;
+   14|       |use fvm_shared::econ::TokenAmount;
+   15|       |use fvm_shared::encoding::tuple::*;
+   16|       |use fvm_shared::encoding::Cbor;
+   17|       |use fvm_shared::error::ExitCode;
+   18|       |use fvm_shared::HAMT_BIT_WIDTH;
+   19|       |use num_traits::{Signed, Zero};
+   20|       |
+   21|       |use super::policy::*;
+   22|       |use super::types::*;
+   23|       |use super::{DealProposal, DealState, DEAL_UPDATES_INTERVAL};
+   24|       |
+   25|       |/// Market actor state
+   26|      4|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+                       ^0     ^0       ^1            ^1
+  ------------------
+  | _RINvXNvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBe_5StateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB13_9serializeNtB3_15___SerializeWithB13_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBg_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtB6_5StateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXs0_NvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBh_5StateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBb_5InnerB16_9serializeNtB6_s0_15___SerializeWithB16_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBj_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBb_5StateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB10_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXs_NvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBa_5InnerB15_9serializeNtB5_s_15___SerializeWithB15_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBi_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3a_4read9SliceReadEEs_0Bi_
+  ------------------
+  | _RINvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtB6_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB1S_4read9SliceReadEEB8_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3a_4read9SliceReadEE0Bi_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3a_4read9SliceReadEEs0_0Bi_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXNvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBh_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB16_11deserializeNtB6_9___VisitorNtB18_7Visitor9visit_seqNtB3_17___DeserializeWithB16_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3S_4read9SliceReadEEBj_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXs_NvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBj_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBd_5InnerB18_11deserializeNtB8_9___VisitorNtB1a_7Visitor9visit_seqNtB5_s_17___DeserializeWithB18_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3W_4read9SliceReadEEBl_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXs0_NvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBk_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBe_5InnerB19_11deserializeNtB9_9___VisitorNtB1b_7Visitor9visit_seqNtB6_s0_17___DeserializeWithB19_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3Y_4read9SliceReadEEBm_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBe_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB13_11deserializeNtB3_9___VisitorNtB15_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB38_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBd_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB12_11deserializeNtB2_9___VisitorNtB14_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBe_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB13_11deserializeNtB3_9___VisitorNtB15_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB38_4read9SliceReadEEBg_
+  ------------------
+  | _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3a_4read9SliceReadEEs_0Bi_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3a_4read9SliceReadEE0Bi_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBg_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB15_11deserializeNtB5_9___VisitorNtB17_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3a_4read9SliceReadEEs0_0Bi_
+  ------------------
+  | _RINvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5stateNtBb_5StateNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB10_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3a_4read9SliceReadEEEBd_:
+  |   26|      1|#[derive(Clone, Default, Serialize_tuple, Deserialize_tuple)]
+  ------------------
+   27|       |pub struct State {
+   28|       |    /// Proposals are deals that have been proposed and not yet cleaned up after expiry or termination.
+   29|       |    /// Array<DealID, DealProposal>
+   30|       |    pub proposals: Cid,
+   31|       |
+   32|       |    // States contains state for deals that have been activated and not yet cleaned up after expiry or termination.
+   33|       |    // After expiration, the state exists until the proposal is cleaned up too.
+   34|       |    // Invariant: keys(States) ⊆ keys(Proposals).
+   35|       |    /// Array<DealID, DealState>
+   36|       |    pub states: Cid,
+   37|       |
+   38|       |    /// PendingProposals tracks dealProposals that have not yet reached their deal start date.
+   39|       |    /// We track them here to ensure that miners can't publish the same deal proposal twice
+   40|       |    pub pending_proposals: Cid,
+   41|       |
+   42|       |    /// Total amount held in escrow, indexed by actor address (including both locked and unlocked amounts).
+   43|       |    pub escrow_table: Cid,
+   44|       |
+   45|       |    /// Amount locked, indexed by actor address.
+   46|       |    /// Note: the amounts in this table do not affect the overall amount in escrow:
+   47|       |    /// only the _portion_ of the total escrow amount that is locked.
+   48|       |    pub locked_table: Cid,
+   49|       |
+   50|       |    /// Deal id state sequential incrementer
+   51|       |    pub next_id: DealID,
+   52|       |
+   53|       |    /// Metadata cached for efficient iteration over deals.
+   54|       |    /// SetMultimap<Address>
+   55|       |    pub deal_ops_by_epoch: Cid,
+   56|       |    pub last_cron: ChainEpoch,
+   57|       |
+   58|       |    /// Total Client Collateral that is locked -> unlocked when deal is terminated
+   59|       |    #[serde(with = "bigint_ser")]
+   60|       |    pub total_client_locked_colateral: TokenAmount,
+   61|       |    /// Total Provider Collateral that is locked -> unlocked when deal is terminated
+   62|       |    #[serde(with = "bigint_ser")]
+   63|       |    pub total_provider_locked_colateral: TokenAmount,
+   64|       |    /// Total storage fee that is locked in escrow -> unlocked when payments are made
+   65|       |    #[serde(with = "bigint_ser")]
+   66|       |    pub total_client_storage_fee: TokenAmount,
+   67|       |}
+   68|       |
+   69|       |impl State {
+   70|      0|    pub fn new<BS: Blockstore>(store: &BS) -> anyhow::Result<Self> {
+   71|      0|        let empty_proposals_array =
+   72|      0|            Array::<(), BS>::new_with_bit_width(store, PROPOSALS_AMT_BITWIDTH)
+   73|      0|                .flush()
+   74|      0|                .map_err(|e| anyhow!("Failed to create empty proposals array: {}", e))?;
+   75|      0|        let empty_states_array = Array::<(), BS>::new_with_bit_width(store, STATES_AMT_BITWIDTH)
+   76|      0|            .flush()
+   77|      0|            .map_err(|e| anyhow!("Failed to create empty states array: {}", e))?;
+   78|       |
+   79|      0|        let empty_pending_proposals_map = make_empty_map::<_, ()>(store, HAMT_BIT_WIDTH)
+   80|      0|            .flush()
+   81|      0|            .map_err(|e| anyhow!("Failed to create empty pending proposals map state: {}", e))?;
+   82|      0|        let empty_balance_table = BalanceTable::new(store)
+   83|      0|            .root()
+   84|      0|            .map_err(|e| anyhow!("Failed to create empty balance table map: {}", e))?;
+   85|       |
+   86|      0|        let empty_deal_ops_hamt = SetMultimap::new(store)
+   87|      0|            .root()
+   88|      0|            .map_err(|e| anyhow!("Failed to create empty multiset: {}", e))?;
+   89|      0|        Ok(Self {
+   90|      0|            proposals: empty_proposals_array,
+   91|      0|            states: empty_states_array,
+   92|      0|            pending_proposals: empty_pending_proposals_map,
+   93|      0|            escrow_table: empty_balance_table,
+   94|      0|            locked_table: empty_balance_table,
+   95|      0|            next_id: 0,
+   96|      0|            deal_ops_by_epoch: empty_deal_ops_hamt,
+   97|      0|            last_cron: EPOCH_UNDEFINED,
+   98|      0|
+   99|      0|            total_client_locked_colateral: TokenAmount::default(),
+  100|      0|            total_provider_locked_colateral: TokenAmount::default(),
+  101|      0|            total_client_storage_fee: TokenAmount::default(),
+  102|      0|        })
+  103|      0|    }
+  104|       |
+  105|      0|    pub fn total_locked(&self) -> TokenAmount {
+  106|      0|        &self.total_client_locked_colateral
+  107|      0|            + &self.total_provider_locked_colateral
+  108|      0|            + &self.total_client_storage_fee
+  109|      0|    }
+  110|       |
+  111|      1|    pub(super) fn mutator<'bs, BS: Blockstore>(
+  112|      1|        &mut self,
+  113|      1|        store: &'bs BS,
+  114|      1|    ) -> MarketStateMutation<'bs, '_, BS> {
+  115|      1|        MarketStateMutation::new(self, store)
+  116|      1|    }
+  117|       |}
+  118|       |
+  119|      0|fn deal_get_payment_remaining(
+  120|      0|    deal: &DealProposal,
+  121|      0|    mut slash_epoch: ChainEpoch,
+  122|      0|) -> Result<TokenAmount, ActorError> {
+  123|      0|    if slash_epoch > deal.end_epoch {
+  124|      0|        return Err(actor_error!(
+  125|      0|            ErrIllegalState,
+  126|      0|            "deal slash epoch {} after end epoch {}",
+  127|      0|            slash_epoch,
+  128|      0|            deal.end_epoch
+  129|      0|        ));
+  130|      0|    }
+  131|      0|
+  132|      0|    // Payments are always for start -> end epoch irrespective of when the deal is slashed.
+  133|      0|    slash_epoch = std::cmp::max(slash_epoch, deal.start_epoch);
+  134|      0|
+  135|      0|    let duration_remaining = deal.end_epoch - slash_epoch;
+  136|      0|    if duration_remaining < 0 {
+  137|      0|        return Err(actor_error!(
+  138|      0|            ErrIllegalState,
+  139|      0|            "deal remaining duration negative: {}",
+  140|      0|            duration_remaining
+  141|      0|        ));
+  142|      0|    }
+  143|      0|
+  144|      0|    Ok(&deal.storage_price_per_epoch * duration_remaining as u64)
+  145|      0|}
+  146|       |
+  147|       |impl Cbor for State {}
+  148|       |
+  149|     12|#[derive(Debug, PartialEq)]
+                       ^0  ^0
+  150|       |pub(super) enum Permission {
+  151|       |    Invalid,
+  152|       |    ReadOnly,
+  153|       |    Write,
+  154|       |}
+  155|       |
+  156|       |pub(super) enum Reason {
+  157|       |    ClientCollateral,
+  158|       |    ClientStorageFee,
+  159|       |    ProviderCollateral,
+  160|       |}
+  161|       |
+  162|       |pub(super) struct MarketStateMutation<'bs, 's, BS> {
+  163|       |    pub(super) st: &'s mut State,
+  164|       |    pub(super) store: &'bs BS,
+  165|       |
+  166|       |    pub(super) proposal_permit: Permission,
+  167|       |    pub(super) deal_proposals: Option<DealArray<'bs, BS>>,
+  168|       |
+  169|       |    pub(super) state_permit: Permission,
+  170|       |    pub(super) deal_states: Option<DealMetaArray<'bs, BS>>,
+  171|       |
+  172|       |    pub(super) escrow_permit: Permission,
+  173|       |    pub(super) escrow_table: Option<BalanceTable<'bs, BS>>,
+  174|       |
+  175|       |    pub(super) pending_permit: Permission,
+  176|       |    pub(super) pending_deals: Option<Set<'bs, BS>>,
+  177|       |
+  178|       |    pub(super) dpe_permit: Permission,
+  179|       |    pub(super) deals_by_epoch: Option<SetMultimap<'bs, BS>>,
+  180|       |
+  181|       |    pub(super) locked_permit: Permission,
+  182|       |    pub(super) locked_table: Option<BalanceTable<'bs, BS>>,
+  183|       |    pub(super) total_client_locked_colateral: Option<TokenAmount>,
+  184|       |    pub(super) total_provider_locked_colateral: Option<TokenAmount>,
+  185|       |    pub(super) total_client_storage_fee: Option<TokenAmount>,
+  186|       |
+  187|       |    pub(super) next_deal_id: DealID,
+  188|       |}
+  189|       |
+  190|       |impl<'bs, 's, BS> MarketStateMutation<'bs, 's, BS>
+  191|       |where
+  192|       |    BS: Blockstore,
+  193|       |{
+  194|      1|    pub(super) fn new(st: &'s mut State, store: &'bs BS) -> Self {
+  195|      1|        Self {
+  196|      1|            next_deal_id: st.next_id,
+  197|      1|            st,
+  198|      1|            store,
+  199|      1|            proposal_permit: Permission::Invalid,
+  200|      1|            deal_proposals: None,
+  201|      1|            state_permit: Permission::Invalid,
+  202|      1|            deal_states: None,
+  203|      1|            escrow_permit: Permission::Invalid,
+  204|      1|            escrow_table: None,
+  205|      1|            pending_permit: Permission::Invalid,
+  206|      1|            pending_deals: None,
+  207|      1|            dpe_permit: Permission::Invalid,
+  208|      1|            deals_by_epoch: None,
+  209|      1|            locked_permit: Permission::Invalid,
+  210|      1|            locked_table: None,
+  211|      1|            total_client_locked_colateral: None,
+  212|      1|            total_provider_locked_colateral: None,
+  213|      1|            total_client_storage_fee: None,
+  214|      1|        }
+  215|      1|    }
+  216|       |
+  217|      1|    pub(super) fn build(&mut self) -> anyhow::Result<&mut Self> {
+  218|      1|        if self.proposal_permit != Permission::Invalid {
+  219|      0|            self.deal_proposals = Some(DealArray::load(&self.st.proposals, self.store)?);
+  220|      1|        }
+  221|       |
+  222|      1|        if self.state_permit != Permission::Invalid {
+  223|      0|            self.deal_states = Some(DealMetaArray::load(&self.st.states, self.store)?);
+  224|      1|        }
+  225|       |
+  226|      1|        if self.locked_permit != Permission::Invalid {
+  227|      1|            self.locked_table = Some(BalanceTable::from_root(self.store, &self.st.locked_table)?);
+                                                                                                             ^0
+  228|       |            self.total_client_locked_colateral =
+  229|      1|                Some(self.st.total_client_locked_colateral.clone());
+  230|      1|            self.total_client_storage_fee = Some(self.st.total_client_storage_fee.clone());
+  231|      1|            self.total_provider_locked_colateral =
+  232|      1|                Some(self.st.total_provider_locked_colateral.clone());
+  233|      0|        }
+  234|       |
+  235|      1|        if self.escrow_permit != Permission::Invalid {
+  236|      1|            self.escrow_table = Some(BalanceTable::from_root(self.store, &self.st.escrow_table)?);
+                                                                                                             ^0
+  237|      0|        }
+  238|       |
+  239|      1|        if self.pending_permit != Permission::Invalid {
+  240|      0|            self.pending_deals = Some(Set::from_root(self.store, &self.st.pending_proposals)?);
+  241|      1|        }
+  242|       |
+  243|      1|        if self.dpe_permit != Permission::Invalid {
+  244|      0|            self.deals_by_epoch = Some(SetMultimap::from_root(
+  245|      0|                self.store,
+  246|      0|                &self.st.deal_ops_by_epoch,
+  247|      0|            )?);
+  248|      1|        }
+  249|       |
+  250|      1|        self.next_deal_id = self.st.next_id;
+  251|      1|
+  252|      1|        Ok(self)
+  253|      1|    }
+  254|       |
+  255|      0|    pub(super) fn with_deal_proposals(&mut self, permit: Permission) -> &mut Self {
+  256|      0|        self.proposal_permit = permit;
+  257|      0|        self
+  258|      0|    }
+  259|       |
+  260|      0|    pub(super) fn with_deal_states(&mut self, permit: Permission) -> &mut Self {
+  261|      0|        self.state_permit = permit;
+  262|      0|        self
+  263|      0|    }
+  264|       |
+  265|      1|    pub(super) fn with_escrow_table(&mut self, permit: Permission) -> &mut Self {
+  266|      1|        self.escrow_permit = permit;
+  267|      1|        self
+  268|      1|    }
+  269|       |
+  270|      1|    pub(super) fn with_locked_table(&mut self, permit: Permission) -> &mut Self {
+  271|      1|        self.locked_permit = permit;
+  272|      1|        self
+  273|      1|    }
+  274|       |
+  275|      0|    pub(super) fn with_pending_proposals(&mut self, permit: Permission) -> &mut Self {
+  276|      0|        self.pending_permit = permit;
+  277|      0|        self
+  278|      0|    }
+  279|       |
+  280|      0|    pub(super) fn with_deals_by_epoch(&mut self, permit: Permission) -> &mut Self {
+  281|      0|        self.dpe_permit = permit;
+  282|      0|        self
+  283|      0|    }
+  284|       |
+  285|      1|    pub(super) fn commit_state(&mut self) -> anyhow::Result<()> {
+  286|      1|        if self.proposal_permit == Permission::Write {
+  287|      0|            if let Some(s) = &mut self.deal_proposals {
+  288|      0|                self.st.proposals = s
+  289|      0|                    .flush()
+  290|      0|                    .map_err(|e| e.downcast_wrap("failed to flush deal proposals"))?;
+  291|      0|            }
+  292|      1|        }
+  293|       |
+  294|      1|        if self.state_permit == Permission::Write {
+  295|      0|            if let Some(s) = &mut self.deal_states {
+  296|      0|                self.st.states = s
+  297|      0|                    .flush()
+  298|      0|                    .map_err(|e| e.downcast_wrap("failed to flush deal states"))?;
+  299|      0|            }
+  300|      1|        }
+  301|       |
+  302|      1|        if self.locked_permit == Permission::Write {
+  303|      1|            if let Some(s) = &mut self.locked_table {
+  304|      1|                self.st.locked_table = s
+  305|      1|                    .root()
+  306|      1|                    .map_err(|e| e.downcast_wrap("failed to flush locked table"))?;
+                                               ^0                                              ^0
+  307|      0|            }
+  308|      1|            if let Some(s) = &mut self.total_client_locked_colateral {
+  309|      1|                self.st.total_client_locked_colateral = s.clone();
+  310|      1|            }
+                           ^0
+  311|      1|            if let Some(s) = &mut self.total_provider_locked_colateral {
+  312|      1|                self.st.total_provider_locked_colateral = s.clone();
+  313|      1|            }
+                           ^0
+  314|      1|            if let Some(s) = &mut self.total_client_storage_fee {
+  315|      1|                self.st.total_client_storage_fee = s.clone();
+  316|      1|            }
+                           ^0
+  317|      0|        }
+  318|       |
+  319|      1|        if self.escrow_permit == Permission::Write {
+  320|      1|            if let Some(s) = &mut self.escrow_table {
+  321|      1|                self.st.escrow_table = s
+  322|      1|                    .root()
+  323|      1|                    .map_err(|e| e.downcast_wrap("failed to flush escrow table"))?;
+                                               ^0                                              ^0
+  324|      0|            }
+  325|      0|        }
+  326|       |
+  327|      1|        if self.pending_permit == Permission::Write {
+  328|      0|            if let Some(s) = &mut self.pending_deals {
+  329|      0|                self.st.pending_proposals = s
+  330|      0|                    .root()
+  331|      0|                    .map_err(|e| e.downcast_wrap("failed to flush escrow table"))?;
+  332|      0|            }
+  333|      1|        }
+  334|       |
+  335|      1|        if self.dpe_permit == Permission::Write {
+  336|      0|            if let Some(s) = &mut self.deals_by_epoch {
+  337|      0|                self.st.deal_ops_by_epoch = s
+  338|      0|                    .root()
+  339|      0|                    .map_err(|e| e.downcast_wrap("failed to flush escrow table"))?;
+  340|      0|            }
+  341|      1|        }
+  342|       |
+  343|      1|        self.st.next_id = self.next_deal_id;
+  344|      1|
+  345|      1|        Ok(())
+  346|      1|    }
+  347|       |
+  348|       |    ////////////////////////////////////////////////////////////////////////////////
+  349|       |    // Deal state operations
+  350|       |    ////////////////////////////////////////////////////////////////////////////////
+  351|       |    #[allow(clippy::too_many_arguments)]
+  352|      0|    pub(super) fn update_pending_deal_state(
+  353|      0|        &mut self,
+  354|      0|        state: &DealState,
+  355|      0|        deal: &DealProposal,
+  356|      0|        epoch: ChainEpoch,
+  357|      0|    ) -> Result<(TokenAmount, ChainEpoch, bool), ActorError> {
+  358|      0|        let ever_updated = state.last_updated_epoch != EPOCH_UNDEFINED;
+  359|      0|        let ever_slashed = state.slash_epoch != EPOCH_UNDEFINED;
+  360|      0|
+  361|      0|        // if the deal was ever updated, make sure it didn't happen in the future
+  362|      0|        if ever_updated && state.last_updated_epoch > epoch {
+  363|      0|            return Err(actor_error!(
+  364|      0|                ErrIllegalState,
+  365|      0|                "deal updated at future epoch {}",
+  366|      0|                state.last_updated_epoch
+  367|      0|            ));
+  368|      0|        }
+  369|      0|
+  370|      0|        // This would be the case that the first callback somehow triggers before it is scheduled to
+  371|      0|        // This is expected not to be able to happen
+  372|      0|        if deal.start_epoch > epoch {
+  373|      0|            return Ok((TokenAmount::zero(), EPOCH_UNDEFINED, false));
+  374|      0|        }
+  375|       |
+  376|      0|        let payment_end_epoch = if ever_slashed {
+  377|      0|            if epoch < state.slash_epoch {
+  378|      0|                return Err(actor_error!(
+  379|      0|                    ErrIllegalState,
+  380|      0|                    "current epoch less than deal slash epoch {}",
+  381|      0|                    state.slash_epoch
+  382|      0|                ));
+  383|      0|            }
+  384|      0|            if state.slash_epoch > deal.end_epoch {
+  385|      0|                return Err(actor_error!(
+  386|      0|                    ErrIllegalState,
+  387|      0|                    "deal slash epoch {} after deal end {}",
+  388|      0|                    state.slash_epoch,
+  389|      0|                    deal.end_epoch
+  390|      0|                ));
+  391|      0|            }
+  392|      0|            state.slash_epoch
+  393|       |        } else {
+  394|      0|            std::cmp::min(deal.end_epoch, epoch)
+  395|       |        };
+  396|       |
+  397|      0|        let payment_start_epoch = if ever_updated && state.last_updated_epoch > deal.start_epoch {
+  398|      0|            state.last_updated_epoch
+  399|       |        } else {
+  400|      0|            deal.start_epoch
+  401|       |        };
+  402|       |
+  403|      0|        let num_epochs_elapsed = payment_end_epoch - payment_start_epoch;
+  404|      0|
+  405|      0|        let total_payment = &deal.storage_price_per_epoch * num_epochs_elapsed;
+  406|      0|        if total_payment > 0.into() {
+  407|      0|            self.transfer_balance(&deal.client, &deal.provider, &total_payment)?;
+  408|      0|        }
+  409|       |
+  410|      0|        if ever_slashed {
+  411|       |            // unlock client collateral and locked storage fee
+  412|      0|            let payment_remaining = deal_get_payment_remaining(deal, state.slash_epoch)?;
+  413|       |
+  414|       |            // Unlock remaining storage fee
+  415|      0|            self.unlock_balance(&deal.client, &payment_remaining, Reason::ClientStorageFee)
+  416|      0|                .map_err(|e| {
+  417|      0|                    e.downcast_default(
+  418|      0|                        ExitCode::ErrIllegalState,
+  419|      0|                        "failed to unlock remaining client storage fee",
+  420|      0|                    )
+  421|      0|                })?;
+  422|       |
+  423|       |            // Unlock client collateral
+  424|      0|            self.unlock_balance(
+  425|      0|                &deal.client,
+  426|      0|                &deal.client_collateral,
+  427|      0|                Reason::ClientCollateral,
+  428|      0|            )
+  429|      0|            .map_err(|e| {
+  430|      0|                e.downcast_default(
+  431|      0|                    ExitCode::ErrIllegalState,
+  432|      0|                    "failed to unlock client collateral",
+  433|      0|                )
+  434|      0|            })?;
+  435|       |
+  436|       |            // slash provider collateral
+  437|      0|            let slashed = deal.provider_collateral.clone();
+  438|      0|            self.slash_balance(&deal.provider, &slashed, Reason::ProviderCollateral)
+  439|      0|                .map_err(|e| e.downcast_default(ExitCode::ErrIllegalState, "slashing balance"))?;
+  440|       |
+  441|      0|            return Ok((slashed, EPOCH_UNDEFINED, true));
+  442|      0|        }
+  443|      0|
+  444|      0|        if epoch >= deal.end_epoch {
+  445|      0|            self.process_deal_expired(deal, state)?;
+  446|      0|            return Ok((TokenAmount::zero(), EPOCH_UNDEFINED, true));
+  447|      0|        }
+  448|      0|
+  449|      0|        // We're explicitly not inspecting the end epoch and may process a deal's expiration late,
+  450|      0|        // in order to prevent an outsider from loading a cron tick by activating too many deals
+  451|      0|        // with the same end epoch.
+  452|      0|        let next = epoch + DEAL_UPDATES_INTERVAL;
+  453|      0|
+  454|      0|        Ok((TokenAmount::zero(), next, false))
+  455|      0|    }
+  456|       |
+  457|       |    /// Deal start deadline elapsed without appearing in a proven sector.
+  458|       |    /// Slash a portion of provider's collateral, and unlock remaining collaterals
+  459|       |    /// for both provider and client.
+  460|       |    pub(super) fn process_deal_init_timed_out(
+  461|       |        &mut self,
+  462|       |        deal: &DealProposal,
+  463|       |    ) -> Result<TokenAmount, ActorError> {
+  464|      0|        self.unlock_balance(
+  465|      0|            &deal.client,
+  466|      0|            &deal.total_storage_fee(),
+  467|      0|            Reason::ClientStorageFee,
+  468|      0|        )
+  469|      0|        .map_err(|e| {
+  470|      0|            e.downcast_default(
+  471|      0|                ExitCode::ErrIllegalState,
+  472|      0|                "failure unlocking client storage fee",
+  473|      0|            )
+  474|      0|        })?;
+  475|       |
+  476|      0|        self.unlock_balance(
+  477|      0|            &deal.client,
+  478|      0|            &deal.client_collateral,
+  479|      0|            Reason::ClientCollateral,
+  480|      0|        )
+  481|      0|        .map_err(|e| {
+  482|      0|            e.downcast_default(
+  483|      0|                ExitCode::ErrIllegalState,
+  484|      0|                "failure unlocking client collateral",
+  485|      0|            )
+  486|      0|        })?;
+  487|       |
+  488|      0|        let amount_slashed =
+  489|      0|            collateral_penalty_for_deal_activation_missed(deal.provider_collateral.clone());
+  490|      0|        let amount_remaining = deal.provider_balance_requirement() - &amount_slashed;
+  491|      0|
+  492|      0|        self.slash_balance(&deal.provider, &amount_slashed, Reason::ProviderCollateral)
+  493|      0|            .map_err(|e| {
+  494|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to slash balance")
+  495|      0|            })?;
+  496|       |
+  497|      0|        self.unlock_balance(
+  498|      0|            &deal.provider,
+  499|      0|            &amount_remaining,
+  500|      0|            Reason::ProviderCollateral,
+  501|      0|        )
+  502|      0|        .map_err(|e| {
+  503|      0|            e.downcast_default(
+  504|      0|                ExitCode::ErrIllegalState,
+  505|      0|                "failed to unlock deal provider balance",
+  506|      0|            )
+  507|      0|        })?;
+  508|       |
+  509|      0|        Ok(amount_slashed)
+  510|      0|    }
+  511|       |
+  512|       |    /// Normal expiration. Unlock collaterals for both miner and client.
+  513|      0|    fn process_deal_expired(
+  514|      0|        &mut self,
+  515|      0|        deal: &DealProposal,
+  516|      0|        state: &DealState,
+  517|      0|    ) -> Result<(), ActorError>
+  518|      0|    where
+  519|      0|        BS: Blockstore,
+  520|      0|    {
+  521|      0|        if state.sector_start_epoch == EPOCH_UNDEFINED {
+  522|      0|            return Err(actor_error!(
+  523|      0|                ErrIllegalState,
+  524|      0|                "start sector epoch undefined"
+  525|      0|            ));
+  526|      0|        }
+  527|      0|
+  528|      0|        self.unlock_balance(
+  529|      0|            &deal.provider,
+  530|      0|            &deal.provider_collateral,
+  531|      0|            Reason::ProviderCollateral,
+  532|      0|        )
+  533|      0|        .map_err(|e| {
+  534|      0|            e.downcast_default(
+  535|      0|                ExitCode::ErrIllegalState,
+  536|      0|                "failed unlocking deal provider balance",
+  537|      0|            )
+  538|      0|        })?;
+  539|       |
+  540|      0|        self.unlock_balance(
+  541|      0|            &deal.client,
+  542|      0|            &deal.client_collateral,
+  543|      0|            Reason::ClientCollateral,
+  544|      0|        )
+  545|      0|        .map_err(|e| {
+  546|      0|            e.downcast_default(
+  547|      0|                ExitCode::ErrIllegalState,
+  548|      0|                "failed unlocking deal client balance",
+  549|      0|            )
+  550|      0|        })?;
+  551|       |
+  552|      0|        Ok(())
+  553|      0|    }
+  554|       |
+  555|      0|    pub(super) fn generate_storage_deal_id(&mut self) -> DealID {
+  556|      0|        let ret = self.next_deal_id;
+  557|      0|        self.next_deal_id += 1;
+  558|      0|        ret
+  559|      0|    }
+  560|       |
+  561|       |    // Return true when the funds in escrow for the input address can cover an additional lockup of amountToLock
+  562|      0|    pub(super) fn balance_covered(
+  563|      0|        &self,
+  564|      0|        addr: Address,
+  565|      0|        amount_to_lock: &TokenAmount,
+  566|      0|    ) -> anyhow::Result<bool> {
+  567|      0|        let prev_locked = self
+  568|      0|            .locked_table
+  569|      0|            .as_ref()
+  570|      0|            .unwrap()
+  571|      0|            .get(&addr)
+  572|      0|            .map_err(|e| {
+  573|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to get locked balance")
+  574|      0|            })?;
+  575|      0|        let escrow_balance = self
+  576|      0|            .escrow_table
+  577|      0|            .as_ref()
+  578|      0|            .unwrap()
+  579|      0|            .get(&addr)
+  580|      0|            .map_err(|e| {
+  581|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to get escrow balance")
+  582|      0|            })?;
+  583|      0|        Ok((prev_locked + amount_to_lock) <= escrow_balance)
+  584|      0|    }
+  585|       |
+  586|      0|    pub(super) fn maybe_lock_balance(
+  587|      0|        &mut self,
+  588|      0|        addr: &Address,
+  589|      0|        amount: &TokenAmount,
+  590|      0|    ) -> Result<(), ActorError> {
+  591|      0|        if amount.is_negative() {
+  592|      0|            return Err(actor_error!(
+  593|      0|                ErrIllegalState,
+  594|      0|                "cannot lock negative amount {}",
+  595|      0|                amount
+  596|      0|            ));
+  597|      0|        }
+  598|       |
+  599|      0|        let prev_locked = self.locked_table.as_ref().unwrap().get(addr).map_err(|e| {
+  600|      0|            e.downcast_default(ExitCode::ErrIllegalState, "failed to get locked balance")
+  601|      0|        })?;
+  602|       |
+  603|      0|        let escrow_balance = self.escrow_table.as_ref().unwrap().get(addr).map_err(|e| {
+  604|      0|            e.downcast_default(ExitCode::ErrIllegalState, "failed to get escrow balance")
+  605|      0|        })?;
+  606|       |
+  607|      0|        if &prev_locked + amount > escrow_balance {
+  608|      0|            return Err(actor_error!(ErrInsufficientFunds;
+  609|      0|                    "not enough balance to lock for addr{}: \
+  610|      0|                    escrow balance {} < prev locked {} + amount {}",
+  611|      0|                    addr, escrow_balance, prev_locked, amount));
+  612|      0|        }
+  613|      0|
+  614|      0|        self.locked_table
+  615|      0|            .as_mut()
+  616|      0|            .unwrap()
+  617|      0|            .add(addr, amount)
+  618|      0|            .map_err(|e| {
+  619|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to add locked balance")
+  620|      0|            })?;
+  621|      0|        Ok(())
+  622|      0|    }
+  623|       |
+  624|       |    pub(super) fn lock_client_and_provider_balances(
+  625|       |        &mut self,
+  626|       |        proposal: &DealProposal,
+  627|       |    ) -> Result<(), ActorError> {
+  628|      0|        self.maybe_lock_balance(&proposal.client, &proposal.client_balance_requirement())
+  629|      0|            .map_err(|e| e.wrap("failed to lock client funds"))?;
+  630|       |
+  631|      0|        self.maybe_lock_balance(&proposal.provider, &proposal.provider_collateral)
+  632|      0|            .map_err(|e| e.wrap("failed to lock provider funds"))?;
+  633|       |
+  634|      0|        if let Some(v) = self.total_client_locked_colateral.as_mut() {
+  635|      0|            *v += &proposal.client_collateral;
+  636|      0|        }
+  637|      0|        if let Some(v) = self.total_client_storage_fee.as_mut() {
+  638|      0|            *v += proposal.total_storage_fee();
+  639|      0|        }
+  640|      0|        if let Some(v) = self.total_provider_locked_colateral.as_mut() {
+  641|      0|            *v += &proposal.provider_collateral;
+  642|      0|        }
+  643|      0|        Ok(())
+  644|      0|    }
+  645|       |
+  646|      0|    fn unlock_balance(
+  647|      0|        &mut self,
+  648|      0|        addr: &Address,
+  649|      0|        amount: &TokenAmount,
+  650|      0|        lock_reason: Reason,
+  651|      0|    ) -> anyhow::Result<()> {
+  652|      0|        if amount.is_negative() {
+  653|      0|            return Err(actor_error!(ErrIllegalState, "unlock negative amount: {}", amount).into());
+  654|      0|        }
+  655|      0|        self.locked_table
+  656|      0|            .as_mut()
+  657|      0|            .unwrap()
+  658|      0|            .must_subtract(addr, amount)?;
+  659|       |
+  660|      0|        match lock_reason {
+  661|      0|            Reason::ClientCollateral => self.total_client_locked_colateral.as_mut().map(|v| {
+  662|      0|                *v -= amount;
+  663|      0|            }),
+  664|      0|            Reason::ClientStorageFee => self.total_client_storage_fee.as_mut().map(|v| {
+  665|      0|                *v -= amount;
+  666|      0|            }),
+  667|      0|            Reason::ProviderCollateral => self.total_provider_locked_colateral.as_mut().map(|v| {
+  668|      0|                *v -= amount;
+  669|      0|            }),
+  670|       |        };
+  671|       |
+  672|      0|        Ok(())
+  673|      0|    }
+  674|       |
+  675|       |    /// move funds from locked in client to available in provider
+  676|      0|    fn transfer_balance(
+  677|      0|        &mut self,
+  678|      0|        from_addr: &Address,
+  679|      0|        to_addr: &Address,
+  680|      0|        amount: &TokenAmount,
+  681|      0|    ) -> Result<(), ActorError> {
+  682|      0|        if amount.is_negative() {
+  683|      0|            return Err(actor_error!(
+  684|      0|                ErrIllegalState,
+  685|      0|                "transfer negative amount: {}",
+  686|      0|                amount
+  687|      0|            ));
+  688|      0|        }
+  689|      0|
+  690|      0|        // Subtract from locked and escrow tables
+  691|      0|        self.escrow_table
+  692|      0|            .as_mut()
+  693|      0|            .unwrap()
+  694|      0|            .must_subtract(from_addr, amount)
+  695|      0|            .map_err(|e| e.downcast_default(ExitCode::ErrIllegalState, "subtract from escrow"))?;
+  696|       |
+  697|      0|        self.unlock_balance(from_addr, amount, Reason::ClientStorageFee)
+  698|      0|            .map_err(|e| e.downcast_default(ExitCode::ErrIllegalState, "subtract from locked"))?;
+  699|       |
+  700|       |        // Add subtracted amount to the recipient
+  701|      0|        self.escrow_table
+  702|      0|            .as_mut()
+  703|      0|            .unwrap()
+  704|      0|            .add(to_addr, amount)
+  705|      0|            .map_err(|e| e.downcast_default(ExitCode::ErrIllegalState, "add to escrow"))?;
+  706|       |
+  707|      0|        Ok(())
+  708|      0|    }
+  709|       |
+  710|      0|    fn slash_balance(
+  711|      0|        &mut self,
+  712|      0|        addr: &Address,
+  713|      0|        amount: &TokenAmount,
+  714|      0|        lock_reason: Reason,
+  715|      0|    ) -> anyhow::Result<()> {
+  716|      0|        if amount.is_negative() {
+  717|      0|            return Err(
+  718|      0|                actor_error!(ErrIllegalState, "negative amount to slash: {}", amount).into(),
+  719|      0|            );
+  720|      0|        }
+  721|      0|
+  722|      0|        // Subtract from locked and escrow tables
+  723|      0|        self.escrow_table
+  724|      0|            .as_mut()
+  725|      0|            .unwrap()
+  726|      0|            .must_subtract(addr, amount)?;
+  727|      0|        self.unlock_balance(addr, amount, lock_reason)
+  728|      0|    }
+  729|       |}
+
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/types.rs:
+    1|       |// Copyright 2019-2022 ChainSafe Systems
+    2|       |// SPDX-License-Identifier: Apache-2.0, MIT
+    3|       |
+    4|       |use actors_runtime::{Array, DealWeight};
+    5|       |use bitfield::BitField;
+    6|       |use cid::Cid;
+    7|       |use fvm_shared::address::Address;
+    8|       |use fvm_shared::bigint::bigint_ser;
+    9|       |use fvm_shared::clock::ChainEpoch;
+   10|       |use fvm_shared::deal::DealID;
+   11|       |use fvm_shared::econ::TokenAmount;
+   12|       |use fvm_shared::encoding::tuple::*;
+   13|       |use fvm_shared::sector::RegisteredSealProof;
+   14|       |
+   15|       |use super::deal::{ClientDealProposal, DealProposal, DealState};
+   16|       |
+   17|       |pub const PROPOSALS_AMT_BITWIDTH: u32 = 5;
+   18|       |pub const STATES_AMT_BITWIDTH: u32 = 6;
+   19|       |
+   20|      2|#[derive(Serialize_tuple, Deserialize_tuple)]
+                       ^0  ^0        ^0
+  ------------------
+  | Unexecuted instantiation: _RINvXNtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB3_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB5_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXNtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB1h_9serializeNtB3_15___SerializeWithB1h_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXNtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB8_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1e_9serializepEBa_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBc_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1i_11deserializeNtB2_9___VisitorNtB1k_7Visitor9expecting
+  ------------------
+  | _RNCINvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBf_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1l_11deserializeNtB5_9___VisitorNtB1n_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3q_4read9SliceReadEE0Bh_:
+  |   20|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1j_11deserializeNtB3_9___VisitorNtB1l_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3o_4read9SliceReadEEBf_
+  ------------------
+  | _RINvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB5_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB28_4read9SliceReadEEB7_:
+  |   20|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBf_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1l_11deserializeNtB5_9___VisitorNtB1n_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3q_4read9SliceReadEE0Bh_
+  ------------------
+  | _RINvXNvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBg_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB1m_11deserializeNtB6_9___VisitorNtB1o_7Visitor9visit_seqNtB3_17___DeserializeWithB1m_11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB48_4read9SliceReadEEBi_:
+  |   20|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBa_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1g_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3q_4read9SliceReadEEEBc_:
+  |   20|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_21WithdrawBalanceParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1j_11deserializeNtB3_9___VisitorNtB1l_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3o_4read9SliceReadEEBf_
+  ------------------
+   21|       |pub struct WithdrawBalanceParams {
+   22|       |    pub provider_or_client: Address,
+   23|       |    #[serde(with = "bigint_ser")]
+   24|       |    pub amount: TokenAmount,
+   25|       |}
+   26|       |
+   27|      2|#[derive(Serialize_tuple, Deserialize_tuple)]
+                                        ^0              ^0
+  ------------------
+  | _RINvXs0_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_21WithdrawBalanceReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_:
+  |   27|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | _RINvXNvNvXs0_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_21WithdrawBalanceReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1h_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_:
+  |   27|      1|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs1_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_21WithdrawBalanceReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1h_11deserializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXs1_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_21WithdrawBalanceReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvNvXs1_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_21WithdrawBalanceReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1j_11deserializepE0Bf_
+  ------------------
+   28|       |#[serde(transparent)]
+   29|       |pub struct WithdrawBalanceReturn {
+   30|       |    #[serde(with = "bigint_ser")]
+   31|       |    pub amount_withdrawn: TokenAmount,
+   32|       |}
+   33|       |
+   34|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs2_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1p_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXs2_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1r_11deserializeNtB2_9___VisitorNtB1t_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2h_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1s_11deserializeNtB3_9___VisitorNtB1u_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3x_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1s_11deserializeNtB3_9___VisitorNtB1u_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3x_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs3_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_29OnMinerSectorsTerminateParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1p_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3z_4read9SliceReadEEEBd_
+  ------------------
+   35|       |pub struct OnMinerSectorsTerminateParams {
+   36|       |    pub epoch: ChainEpoch,
+   37|       |    pub deal_ids: Vec<DealID>,
+   38|       |}
+   39|       |
+   40|      0|#[derive(Serialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_32OnMinerSectorsTerminateParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1s_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXs4_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_32OnMinerSectorsTerminateParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+   41|       |pub struct OnMinerSectorsTerminateParamsRef<'a> {
+   42|       |    pub epoch: ChainEpoch,
+   43|       |    pub deal_ids: &'a [DealID],
+   44|       |}
+   45|       |
+   46|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs5_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1l_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1l_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3v_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1n_11deserializeNtB2_9___VisitorNtB1p_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1o_11deserializeNtB3_9___VisitorNtB1q_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3t_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1o_11deserializeNtB3_9___VisitorNtB1q_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3t_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2d_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs6_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_25PublishStorageDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1o_11deserializeNtB3_9___VisitorNtB1q_7Visitor20visit_newtype_structQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3G_4read9SliceReadEEBg_
+  ------------------
+   47|       |pub struct PublishStorageDealsParams {
+   48|       |    pub deals: Vec<ClientDealProposal>,
+   49|       |}
+   50|       |
+   51|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXs7_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs7_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1l_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXs8_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1o_11deserializeNtB3_9___VisitorNtB1q_7Visitor9visit_seqpEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXs8_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs8_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1l_11deserializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXs8_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_25PublishStorageDealsReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1n_11deserializeNtB2_9___VisitorNtB1p_7Visitor9expecting
+  ------------------
+   52|       |pub struct PublishStorageDealsReturn {
+   53|       |    pub ids: Vec<DealID>,
+   54|       |    pub valid_deals: BitField,
+   55|       |}
+   56|       |
+   57|       |// Changed since V2:
+   58|       |// - Array of Sectors rather than just one
+   59|       |// - Removed SectorStart
+   60|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXs9_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1q_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXs9_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1t_11deserializeNtB3_9___VisitorNtB1v_7Visitor20visit_newtype_structQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3L_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1s_11deserializeNtB2_9___VisitorNtB1u_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1q_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3A_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1t_11deserializeNtB3_9___VisitorNtB1v_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3y_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1t_11deserializeNtB3_9___VisitorNtB1v_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3y_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXsa_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_30VerifyDealsForActivationParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2i_4read9SliceReadEEB8_
+  ------------------
+   61|       |pub struct VerifyDealsForActivationParams {
+   62|       |    pub sectors: Vec<SectorDeals>,
+   63|       |}
+   64|       |
+   65|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsb_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_11SectorDealsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB17_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsb_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_11SectorDealsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_11SectorDealsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1a_11deserializeNtB3_9___VisitorNtB1c_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3f_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_11SectorDealsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB19_11deserializeNtB2_9___VisitorNtB1b_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_11SectorDealsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB1Z_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_11SectorDealsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB17_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3h_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsc_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_11SectorDealsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1a_11deserializeNtB3_9___VisitorNtB1c_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3f_4read9SliceReadEEBg_
+  ------------------
+   66|       |pub struct SectorDeals {
+   67|       |    pub sector_expiry: ChainEpoch,
+   68|       |    pub deal_ids: Vec<DealID>,
+   69|       |}
+   70|       |
+   71|      0|#[derive(Serialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXsd_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_33VerifyDealsForActivationParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsd_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_33VerifyDealsForActivationParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1t_9serializepEBd_
+  ------------------
+   72|       |pub struct VerifyDealsForActivationParamsRef<'a> {
+   73|       |    pub sectors: &'a [SectorDeals],
+   74|       |}
+   75|       |
+   76|      0|#[derive(Serialize_tuple, Deserialize_tuple, Default)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXse_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1q_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXse_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsf_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1q_11deserializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsf_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1t_11deserializeNtB3_9___VisitorNtB1v_7Visitor20visit_newtype_structpEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsf_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1s_11deserializeNtB2_9___VisitorNtB1u_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXsf_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsf_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_30VerifyDealsForActivationReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1t_11deserializeNtB3_9___VisitorNtB1v_7Visitor9visit_seqpEBg_
+  ------------------
+   77|       |pub struct VerifyDealsForActivationReturn {
+   78|       |    pub sectors: Vec<SectorWeights>,
+   79|       |}
+   80|       |
+   81|      0|#[derive(Serialize_tuple, Deserialize_tuple, Default)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsh_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB19_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsh_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvNvXsh_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBg_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtBa_5InnerB1e_9serializeNtB5_s_15___SerializeWithB1e_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsh_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB8_5InnerB1c_9serializeNtB3_15___SerializeWithB1c_9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1c_11deserializeNtB3_9___VisitorNtB1e_7Visitor9visit_seqpEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB19_11deserializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1b_11deserializeNtB2_9___VisitorNtB1d_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBg_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1e_11deserializeNtB5_9___VisitorNtB1g_7Visitor9visit_seqpEs_0Bi_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBh_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBb_5InnerB1f_11deserializeNtB6_9___VisitorNtB1h_7Visitor9visit_seqNtB3_17___DeserializeWithB1f_11deserializepEBj_
+  ------------------
+  | Unexecuted instantiation: _RINvXs_NvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBj_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBd_5InnerB1h_11deserializeNtB8_9___VisitorNtB1j_7Visitor9visit_seqNtB5_s_17___DeserializeWithB1h_11deserializepEBl_
+  ------------------
+  | Unexecuted instantiation: _RNCINvXNvXNvNvXsi_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBg_13SectorWeightsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtBa_5InnerB1e_11deserializeNtB5_9___VisitorNtB1g_7Visitor9visit_seqpE0Bi_
+  ------------------
+   82|       |pub struct SectorWeights {
+   83|       |    pub deal_space: u64,
+   84|       |    #[serde(with = "bigint_ser")]
+   85|       |    pub deal_weight: DealWeight,
+   86|       |    #[serde(with = "bigint_ser")]
+   87|       |    pub verified_deal_weight: DealWeight,
+   88|       |}
+   89|       |
+   90|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsk_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1f_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsk_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsl_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1i_11deserializeNtB3_9___VisitorNtB1k_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3n_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsl_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1i_11deserializeNtB3_9___VisitorNtB1k_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3n_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXsl_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB27_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsl_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1h_11deserializeNtB2_9___VisitorNtB1j_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsl_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_19ActivateDealsParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1f_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3p_4read9SliceReadEEEBd_
+  ------------------
+   91|       |pub struct ActivateDealsParams {
+   92|       |    pub deal_ids: Vec<DealID>,
+   93|       |    pub sector_expiry: ChainEpoch,
+   94|       |}
+   95|       |
+   96|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsm_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1n_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsm_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1q_11deserializeNtB3_9___VisitorNtB1s_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3v_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1p_11deserializeNtB2_9___VisitorNtB1r_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB2f_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1q_11deserializeNtB3_9___VisitorNtB1s_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3v_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1q_11deserializeNtB3_9___VisitorNtB1s_7Visitor20visit_newtype_structQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3I_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsn_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_27ComputeDataCommitmentParamsNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1n_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3x_4read9SliceReadEEEBd_
+  ------------------
+   97|       |pub struct ComputeDataCommitmentParams {
+   98|       |    pub inputs: Vec<SectorDataSpec>,
+   99|       |}
+  100|       |
+  101|      0|#[derive(Serialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXso_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_30ComputeDataCommitmentParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1q_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXso_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_30ComputeDataCommitmentParamsRefNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  102|       |pub struct ComputeDataCommitmentParamsRef<'a> {
+  103|       |    pub inputs: &'a [SectorDataSpec],
+  104|       |}
+  105|       |
+  106|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsp_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1n_9serializeINtCs4fKc25N7NaB_11serde_tuple10SerializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsp_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor3ser10SerializerQINtNtCsaCT7QO4lmn5_5alloc3vec3VechEEEB8_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXsq_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1p_11deserializeNtB2_9___VisitorNtB1r_7Visitor9expecting
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsq_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1n_11deserializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsq_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsq_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1q_11deserializeNtB3_9___VisitorNtB1s_7Visitor20visit_newtype_structpEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXsq_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_27ComputeDataCommitmentReturnNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1q_11deserializeNtB3_9___VisitorNtB1s_7Visitor9visit_seqpEBg_
+  ------------------
+  107|       |pub struct ComputeDataCommitmentReturn {
+  108|       |    pub commds: Vec<Cid>,
+  109|       |}
+  110|       |
+  111|       |/// A specialization of a array to deals.
+  112|       |pub type DealArray<'bs, BS> = Array<'bs, DealProposal, BS>;
+  113|       |
+  114|       |/// A specialization of a array to deals.
+  115|       |pub type DealMetaArray<'bs, BS> = Array<'bs, DealState, BS>;
+  116|       |
+  117|      0|#[derive(Serialize_tuple, Deserialize_tuple)]
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXsr_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serialize1__NtB5_5InnerB1a_9serializepEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXsr_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde3ser9Serialize9serializepEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXss_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1d_11deserializeNtB3_9___VisitorNtB1f_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de9SeqAccessNtNtB3i_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvNvXss_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBb_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB5_5InnerB1a_11deserializeINtCs4fKc25N7NaB_11serde_tuple12DeserializerQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB3k_4read9SliceReadEEEBd_
+  ------------------
+  | Unexecuted instantiation: _RINvXss_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtB6_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserializeQINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de12DeserializerNtNtB22_4read9SliceReadEEB8_
+  ------------------
+  | Unexecuted instantiation: _RINvXNvXNvNvXss_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBe_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB8_5InnerB1d_11deserializeNtB3_9___VisitorNtB1f_7Visitor9visit_seqINtNtCs9sPO1MyxG8F_13cs_serde_cbor2de19IndefiniteSeqAccessNtNtB3i_4read9SliceReadEEBg_
+  ------------------
+  | Unexecuted instantiation: _RNvXNvXNvNvXss_NtCsh0AsSxgjHCW_16fvm_actor_market5typesNtBd_14SectorDataSpecNtNtCsg3M3faQ2cRa_5serde2de11Deserialize11deserialize1__NtB7_5InnerB1c_11deserializeNtB2_9___VisitorNtB1e_7Visitor9expecting
+  ------------------
+  118|       |pub struct SectorDataSpec {
+  119|       |    pub deal_ids: Vec<DealID>,
+  120|       |    pub sector_type: RegisteredSealProof,
+  121|       |}
+
+/home/dtynn/proj/github.com/filecoin-project/ref-fvm/actors/market/src/lib.rs:
+    1|       |// Copyright 2019-2022 ChainSafe Systems
+    2|       |// SPDX-License-Identifier: Apache-2.0, MIT
+    3|       |
+    4|       |use std::collections::{BTreeMap, BTreeSet};
+    5|       |
+    6|       |use actors_runtime::runtime::{ActorCode, Runtime};
+    7|       |use actors_runtime::{
+    8|       |    actor_error, wasm_trampoline, ActorDowncast, ActorError, BURNT_FUNDS_ACTOR_ADDR,
+    9|       |    CALLER_TYPES_SIGNABLE, CRON_ACTOR_ADDR, MINER_ACTOR_CODE_ID, REWARD_ACTOR_ADDR,
+   10|       |    STORAGE_POWER_ACTOR_ADDR, SYSTEM_ACTOR_ADDR, VERIFIED_REGISTRY_ACTOR_ADDR,
+   11|       |};
+   12|       |use bitfield::BitField;
+   13|       |use fvm_shared::address::Address;
+   14|       |use fvm_shared::bigint::BigInt;
+   15|       |use fvm_shared::blockstore::Blockstore;
+   16|       |use fvm_shared::clock::{ChainEpoch, QuantSpec, EPOCH_UNDEFINED};
+   17|       |use fvm_shared::deal::DealID;
+   18|       |use fvm_shared::econ::TokenAmount;
+   19|       |use fvm_shared::encoding::{to_vec, Cbor, RawBytes};
+   20|       |use fvm_shared::error::ExitCode;
+   21|       |use fvm_shared::piece::PieceInfo;
+   22|       |use fvm_shared::reward::ThisEpochRewardReturn;
+   23|       |use fvm_shared::sector::StoragePower;
+   24|       |use fvm_shared::{ActorID, MethodNum, METHOD_CONSTRUCTOR, METHOD_SEND};
+   25|       |use log::info;
+   26|       |use num_derive::FromPrimitive;
+   27|       |use num_traits::{FromPrimitive, Signed, Zero};
+   28|       |
+   29|       |pub use self::deal::*;
+   30|       |use self::policy::*;
+   31|       |pub use self::state::*;
+   32|       |pub use self::types::*;
+   33|       |use crate::ext::verifreg::UseBytesParams;
+   34|       |
+   35|       |// export for testing
+   36|       |mod deal;
+   37|       |#[doc(hidden)]
+   38|       |pub mod ext;
+   39|       |mod policy;
+   40|       |mod state;
+   41|       |mod types;
+   42|       |
+   43|       |/// Export the wasm binary
+   44|       |#[cfg(not(feature = "runtime-wasm"))]
+   45|       |pub mod wasm {
+   46|       |    include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+   47|       |
+   48|       |    #[cfg(test)]
+   49|       |    mod tests {
+   50|       |        use super::*;
+   51|       |
+   52|       |        #[test]
+   53|       |        fn test_wasm_binaries() {
+   54|       |            assert!(!WASM_BINARY.unwrap().is_empty());
+   55|       |            assert!(!WASM_BINARY_BLOATY.unwrap().is_empty());
+   56|       |        }
+   57|       |    }
+   58|       |}
+   59|       |
+   60|       |wasm_trampoline!(Actor);
+   61|       |
+   62|      1|fn request_miner_control_addrs<BS, RT>(
+   63|      1|    rt: &mut RT,
+   64|      1|    miner_addr: Address,
+   65|      1|) -> Result<(Address, Address, Vec<Address>), ActorError>
+   66|      1|where
+   67|      1|    BS: Blockstore,
+   68|      1|    RT: Runtime<BS>,
+   69|      1|{
+   70|      1|    let ret = rt.send(
+   71|      1|        miner_addr,
+   72|      1|        ext::miner::CONTROL_ADDRESSES_METHOD,
+   73|      1|        RawBytes::default(),
+   74|      1|        TokenAmount::zero(),
+   75|      1|    )?;
+                   ^0
+   76|      1|    let addrs: ext::miner::GetControlAddressesReturnParams = ret.deserialize()?;
+                                                                                            ^0
+   77|       |
+   78|      1|    Ok((addrs.owner, addrs.worker, addrs.control_addresses))
+   79|      1|}
+   80|       |
+   81|       |// * Updated to specs-actors commit: e195950ba98adb8ce362030356bf4a3809b7ec77 (v2.3.2)
+   82|       |
+   83|       |/// Market actor methods available
+   84|      1|#[derive(FromPrimitive)]
+  ------------------
+  | _RNvXNvCsh0AsSxgjHCW_16fvm_actor_market34__IMPL_NUM_FromPrimitive_FOR_MethodNtB4_6MethodNtNtCs9AeTcfGaH9B_10num_traits4cast13FromPrimitive8from_i64B4_:
+  |   84|      1|#[derive(FromPrimitive)]
+  ------------------
+  | _RNvXNvCsh0AsSxgjHCW_16fvm_actor_market34__IMPL_NUM_FromPrimitive_FOR_MethodNtB4_6MethodNtNtCs9AeTcfGaH9B_10num_traits4cast13FromPrimitive8from_u64B4_:
+  |   84|      1|#[derive(FromPrimitive)]
+  ------------------
+   85|       |#[repr(u64)]
+   86|       |pub enum Method {
+   87|       |    Constructor = METHOD_CONSTRUCTOR,
+   88|       |    AddBalance = 2,
+   89|       |    WithdrawBalance = 3,
+   90|       |    PublishStorageDeals = 4,
+   91|       |    VerifyDealsForActivation = 5,
+   92|       |    ActivateDeals = 6,
+   93|       |    OnMinerSectorsTerminate = 7,
+   94|       |    ComputeDataCommitment = 8,
+   95|       |    CronTick = 9,
+   96|       |}
+   97|       |
+   98|       |/// Market Actor
+   99|       |pub struct Actor;
+  100|       |impl Actor {
+  101|       |    pub fn constructor<BS, RT>(rt: &mut RT) -> Result<(), ActorError>
+  102|       |    where
+  103|       |        BS: Blockstore,
+  104|       |        RT: Runtime<BS>,
+  105|       |    {
+  106|      0|        rt.validate_immediate_caller_is(std::iter::once(&*SYSTEM_ACTOR_ADDR))?;
+  107|       |
+  108|      0|        let st = State::new(rt.store()).map_err(|e| {
+  109|      0|            e.downcast_default(ExitCode::ErrIllegalState, "Failed to create market state")
+  110|      0|        })?;
+  111|      0|        rt.create(&st)?;
+  112|      0|        Ok(())
+  113|      0|    }
+  114|       |
+  115|       |    /// Deposits the received value into the balance held in escrow.
+  116|      0|    fn add_balance<BS, RT>(rt: &mut RT, provider_or_client: Address) -> Result<(), ActorError>
+  117|      0|    where
+  118|      0|        BS: Blockstore,
+  119|      0|        RT: Runtime<BS>,
+  120|      0|    {
+  121|      0|        let msg_value = rt.message().value_received();
+  122|      0|
+  123|      0|        if msg_value <= TokenAmount::from(0) {
+  124|      0|            return Err(actor_error!(
+  125|      0|                ErrIllegalArgument,
+  126|      0|                "balance to add must be greater than zero was: {}",
+  127|      0|                msg_value
+  128|      0|            ));
+  129|      0|        }
+  130|      0|
+  131|      0|        // only signing parties can add balance for client AND provider.
+  132|      0|        rt.validate_immediate_caller_type(CALLER_TYPES_SIGNABLE.iter())?;
+  133|       |
+  134|      0|        let (nominal, _, _) = escrow_address(rt, &provider_or_client)?;
+  135|       |
+  136|      0|        rt.transaction(|st: &mut State, rt| {
+  137|      0|            let mut msm = st.mutator(rt.store());
+  138|      0|            msm.with_escrow_table(Permission::Write)
+  139|      0|                .with_locked_table(Permission::Write)
+  140|      0|                .build()
+  141|      0|                .map_err(|e| {
+  142|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  143|      0|                })?;
+  144|       |
+  145|      0|            msm.escrow_table
+  146|      0|                .as_mut()
+  147|      0|                .unwrap()
+  148|      0|                .add(&nominal, &msg_value)
+  149|      0|                .map_err(|e| {
+  150|      0|                    e.downcast_default(
+  151|      0|                        ExitCode::ErrIllegalState,
+  152|      0|                        "failed to add balance to escrow table",
+  153|      0|                    )
+  154|      0|                })?;
+  155|       |
+  156|      0|            msm.commit_state().map_err(|e| {
+  157|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+  158|      0|            })?;
+  159|       |
+  160|      0|            Ok(())
+  161|      0|        })?;
+  162|       |
+  163|      0|        Ok(())
+  164|      0|    }
+  165|       |
+  166|       |    /// Attempt to withdraw the specified amount from the balance held in escrow.
+  167|       |    /// If less than the specified amount is available, yields the entire available balance.
+  168|      1|    fn withdraw_balance<BS, RT>(
+  169|      1|        rt: &mut RT,
+  170|      1|        params: WithdrawBalanceParams,
+  171|      1|    ) -> Result<WithdrawBalanceReturn, ActorError>
+  172|      1|    where
+  173|      1|        BS: Blockstore,
+  174|      1|        RT: Runtime<BS>,
+  175|      1|    {
+  176|      1|        if params.amount < TokenAmount::from(0) {
+  177|      0|            return Err(actor_error!(
+  178|      0|                ErrIllegalArgument,
+  179|      0|                "negative amount: {}",
+  180|      0|                params.amount
+  181|      0|            ));
+  182|      1|        }
+  183|       |
+  184|      1|        let (nominal, recipient, approved) = escrow_address(rt, &params.provider_or_client)?;
+                                                                                                         ^0
+  185|       |        // for providers -> only corresponding owner or worker can withdraw
+  186|       |        // for clients -> only the client i.e the recipient can withdraw
+  187|      1|        rt.validate_immediate_caller_is(&approved)?;
+                                                                ^0
+  188|       |
+  189|      1|        let amount_extracted = rt.transaction(|st: &mut State, rt| {
+  190|      1|            let mut msm = st.mutator(rt.store());
+  191|      1|            msm.with_escrow_table(Permission::Write)
+  192|      1|                .with_locked_table(Permission::Write)
+  193|      1|                .build()
+  194|      1|                .map_err(|e| {
+  195|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  196|      1|                })?;
+                                ^0
+  197|       |
+  198|       |            // The withdrawable amount might be slightly less than nominal
+  199|       |            // depending on whether or not all relevant entries have been processed
+  200|       |            // by cron
+  201|      1|            let min_balance = msm
+  202|      1|                .locked_table
+  203|      1|                .as_ref()
+  204|      1|                .unwrap()
+  205|      1|                .get(&nominal)
+  206|      1|                .map_err(|e| {
+  207|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to get locked balance")
+  208|      1|                })?;
+                                ^0
+  209|       |
+  210|      1|            let ex = msm
+  211|      1|                .escrow_table
+  212|      1|                .as_mut()
+  213|      1|                .unwrap()
+  214|      1|                .subtract_with_minimum(&nominal, &params.amount, &min_balance)
+  215|      1|                .map_err(|e| {
+  216|      0|                    e.downcast_default(
+  217|      0|                        ExitCode::ErrIllegalState,
+  218|      0|                        "failed to subtract from escrow table",
+  219|      0|                    )
+  220|      1|                })?;
+                                ^0
+  221|       |
+  222|      1|            msm.commit_state().map_err(|e| {
+  223|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+  224|      1|            })?;
+                            ^0
+  225|       |
+  226|      1|            Ok(ex)
+  227|      1|        })?;
+                        ^0
+  228|       |
+  229|      1|        rt.send(
+  230|      1|            recipient,
+  231|      1|            METHOD_SEND,
+  232|      1|            RawBytes::default(),
+  233|      1|            amount_extracted.clone(),
+  234|      1|        )?;
+                       ^0
+  235|       |
+  236|      1|        Ok(WithdrawBalanceReturn {
+  237|      1|            amount_withdrawn: amount_extracted,
+  238|      1|        })
+  239|      1|    }
+  240|       |
+  241|       |    /// Publish a new set of storage deals (not yet included in a sector).
+  242|       |    fn publish_storage_deals<BS, RT>(
+  243|       |        rt: &mut RT,
+  244|       |        params: PublishStorageDealsParams,
+  245|       |    ) -> Result<PublishStorageDealsReturn, ActorError>
+  246|       |    where
+  247|       |        BS: Blockstore,
+  248|       |        RT: Runtime<BS>,
+  249|       |    {
+  250|       |        // Deal message must have a From field identical to the provider of all the deals.
+  251|       |        // This allows us to retain and verify only the client's signature in each deal proposal itself.
+  252|      0|        rt.validate_immediate_caller_type(CALLER_TYPES_SIGNABLE.iter())?;
+  253|      0|        if params.deals.is_empty() {
+  254|      0|            return Err(actor_error!(ErrIllegalArgument, "Empty deals parameter"));
+  255|      0|        }
+  256|      0|
+  257|      0|        // All deals should have the same provider so get worker once
+  258|      0|        let provider_raw = params.deals[0].proposal.provider;
+  259|      0|        let provider = rt.resolve_address(&provider_raw).ok_or_else(|| {
+  260|      0|            actor_error!(
+  261|      0|                ErrNotFound,
+  262|      0|                "failed to resolve provider address {}",
+  263|      0|                provider_raw
+  264|      0|            )
+  265|      0|        })?;
+  266|       |
+  267|      0|        let code_id = rt.get_actor_code_cid(&provider).ok_or_else(|| {
+  268|      0|            actor_error!(ErrIllegalArgument, "no code ID for address {}", provider)
+  269|      0|        })?;
+  270|      0|        if code_id != *MINER_ACTOR_CODE_ID {
+  271|      0|            return Err(actor_error!(
+  272|      0|                ErrIllegalArgument,
+  273|      0|                "deal provider is not a storage miner actor"
+  274|      0|            ));
+  275|      0|        }
+  276|       |
+  277|      0|        let (_, worker, controllers) = request_miner_control_addrs(rt, provider)?;
+  278|      0|        let caller = rt.message().caller();
+  279|      0|        let mut caller_ok = caller == worker;
+  280|      0|        for controller in controllers.iter() {
+  281|      0|            if caller_ok {
+  282|      0|                break;
+  283|      0|            }
+  284|      0|            caller_ok = caller == *controller;
+  285|       |        }
+  286|      0|        if !caller_ok {
+  287|      0|            return Err(actor_error!(
+  288|      0|                ErrForbidden,
+  289|      0|                "caller {} is not worker or control address of provider {}",
+  290|      0|                caller,
+  291|      0|                provider
+  292|      0|            ));
+  293|      0|        }
+  294|       |
+  295|      0|        let baseline_power = request_current_baseline_power(rt)?;
+  296|      0|        let (network_raw_power, _) = request_current_network_power(rt)?;
+  297|       |
+  298|       |        // Drop invalid deals
+  299|      0|        let mut proposal_cid_lookup = BTreeSet::new();
+  300|      0|        let mut valid_proposal_cids = Vec::new();
+  301|      0|        let mut valid_deals = Vec::with_capacity(params.deals.len());
+  302|      0|        let mut total_client_lockup: BTreeMap<ActorID, TokenAmount> = BTreeMap::new();
+  303|      0|        let mut total_provider_lockup = TokenAmount::zero();
+  304|      0|
+  305|      0|        let mut valid_input_bf = BitField::default();
+  306|      0|        let mut state: State = rt.state::<State>()?;
+  307|       |
+  308|      0|        let store = rt.store();
+  309|      0|        let mut msm = state.mutator(store);
+  310|      0|        msm.with_pending_proposals(Permission::ReadOnly)
+  311|      0|            .with_escrow_table(Permission::ReadOnly)
+  312|      0|            .with_locked_table(Permission::ReadOnly)
+  313|      0|            .build()
+  314|      0|            .map_err(|e| e.downcast_default(ExitCode::ErrIllegalState, "failed to load msm"))?;
+  315|       |
+  316|      0|        for (di, mut deal) in params.deals.into_iter().enumerate() {
+  317|       |            // drop malformed deals
+  318|      0|            if let Err(e) = validate_deal(rt, &deal, &network_raw_power, &baseline_power) {
+  319|      0|                info!("invalid deal {}: {}", di, e);
+  320|      0|                continue;
+  321|      0|            }
+  322|      0|
+  323|      0|            if deal.proposal.provider != provider && deal.proposal.provider != provider_raw {
+  324|      0|                info!(
+  325|      0|                    "invalid deal {}: cannot publish deals from multiple providers in one batch",
+  326|       |                    di
+  327|       |                );
+  328|      0|                continue;
+  329|      0|            }
+  330|      0|            let client = match rt.resolve_address(&deal.proposal.client) {
+  331|      0|                Some(client) => client,
+  332|       |                _ => {
+  333|      0|                    info!(
+  334|      0|                        "invalid deal {}: failed to resolve proposal.client address {} for deal",
+  335|       |                        di, deal.proposal.client
+  336|       |                    );
+  337|      0|                    continue;
+  338|       |                }
+  339|       |            };
+  340|       |
+  341|       |            // drop deals with insufficient lock up to cover costs
+  342|      0|            let client_id = client
+  343|      0|                .id()
+  344|      0|                .expect("resolved address should be an ID address");
+  345|      0|            let lockup = total_client_lockup.entry(client_id).or_default();
+  346|      0|            *lockup += deal.proposal.client_balance_requirement();
+  347|       |
+  348|      0|            let client_balance_ok = msm.balance_covered(client, lockup).map_err(|e| {
+  349|      0|                e.downcast_default(
+  350|      0|                    ExitCode::ErrIllegalState,
+  351|      0|                    "failed to check client balance coverage",
+  352|      0|                )
+  353|      0|            })?;
+  354|       |
+  355|      0|            if !client_balance_ok {
+  356|      0|                info!(
+  357|      0|                    "invalid deal: {}: insufficient client funds to cover proposal cost",
+  358|       |                    di
+  359|       |                );
+  360|      0|                continue;
+  361|      0|            }
+  362|      0|            total_provider_lockup += &deal.proposal.provider_collateral;
+  363|      0|            let provider_balance_ok = msm
+  364|      0|                .balance_covered(provider, &total_provider_lockup)
+  365|      0|                .map_err(|e| {
+  366|      0|                    e.downcast_default(
+  367|      0|                        ExitCode::ErrIllegalState,
+  368|      0|                        "failed to check provider balance coverage",
+  369|      0|                    )
+  370|      0|                })?;
+  371|       |
+  372|      0|            if !provider_balance_ok {
+  373|      0|                info!(
+  374|      0|                    "invalid deal: {}: insufficient provider funds to cover proposal cost",
+  375|       |                    di
+  376|       |                );
+  377|      0|                continue;
+  378|      0|            }
+  379|      0|
+  380|      0|            // drop duplicate deals
+  381|      0|            // Normalise provider and client addresses in the proposal stored on chain.
+  382|      0|            // Must happen after signature verification and before taking cid.
+  383|      0|
+  384|      0|            deal.proposal.provider = provider;
+  385|      0|            deal.proposal.client = client;
+  386|      0|            let pcid = deal.proposal.cid().map_err(|e| {
+  387|      0|                actor_error!(ErrIllegalArgument; "failed to take cid of proposal {}: {}", di, e)
+  388|      0|            })?;
+  389|       |
+  390|       |            // check proposalCids for duplication within message batch
+  391|       |            // check state PendingProposals for duplication across messages
+  392|      0|            let duplicate_in_state = msm
+  393|      0|                .pending_deals
+  394|      0|                .as_ref()
+  395|      0|                .unwrap()
+  396|      0|                .has(&pcid.to_bytes())
+  397|      0|                .map_err(|e| {
+  398|      0|                    e.downcast_default(
+  399|      0|                        ExitCode::ErrIllegalState,
+  400|      0|                        "failed to check for existence of deal proposal",
+  401|      0|                    )
+  402|      0|                })?;
+  403|      0|            let duplicate_in_message = proposal_cid_lookup.contains(&pcid);
+  404|      0|            if duplicate_in_state || duplicate_in_message {
+  405|      0|                info!(
+  406|      0|                    "invalid deal {}: cannot publish duplicate deal proposal",
+  407|       |                    di
+  408|       |                );
+  409|      0|                continue;
+  410|      0|            }
+  411|      0|
+  412|      0|            // check VerifiedClient allowed cap and deduct PieceSize from cap
+  413|      0|            // drop deals with a DealSize that cannot be fully covered by VerifiedClient's available DataCap
+  414|      0|            if deal.proposal.verified_deal {
+  415|      0|                if let Err(e) = rt.send(
+  416|      0|                    *VERIFIED_REGISTRY_ACTOR_ADDR,
+  417|      0|                    crate::ext::verifreg::USE_BYTES_METHOD as u64,
+  418|      0|                    RawBytes::serialize(UseBytesParams {
+  419|      0|                        address: client,
+  420|      0|                        deal_size: BigInt::from(deal.proposal.piece_size.0),
+  421|      0|                    })?,
+  422|      0|                    TokenAmount::zero(),
+  423|       |                ) {
+  424|      0|                    info!(
+  425|      0|                        "invalid deal {}: failed to acquire datacap exitcode: {}",
+  426|       |                        di, e
+  427|       |                    );
+  428|      0|                    continue;
+  429|      0|                }
+  430|      0|            }
+  431|       |
+  432|      0|            proposal_cid_lookup.insert(pcid);
+  433|      0|            valid_proposal_cids.push(pcid);
+  434|      0|            valid_deals.push(deal);
+  435|      0|            valid_input_bf.set(di as u64)
+  436|       |        }
+  437|       |
+  438|      0|        let valid_deal_count = valid_input_bf.len();
+  439|      0|        if valid_deals.len() != valid_proposal_cids.len() {
+  440|      0|            return Err(actor_error!(
+  441|      0|                ErrIllegalState,
+  442|      0|                "{} valid deals but {} valid proposal cids",
+  443|      0|                valid_deals.len(),
+  444|      0|                valid_proposal_cids.len()
+  445|      0|            ));
+  446|      0|        }
+  447|      0|        if valid_deal_count != valid_deals.len() as u64 {
+  448|      0|            return Err(actor_error!(
+  449|      0|                ErrIllegalState,
+  450|      0|                "{} valid deals but valid_deal_count {}",
+  451|      0|                valid_deals.len(),
+  452|      0|                valid_deal_count
+  453|      0|            ));
+  454|      0|        }
+  455|      0|        if valid_deal_count == 0 {
+  456|      0|            return Err(actor_error!(
+  457|      0|                ErrIllegalArgument,
+  458|      0|                "All deal proposals invalid"
+  459|      0|            ));
+  460|      0|        }
+  461|      0|
+  462|      0|        let mut new_deal_ids = Vec::with_capacity(valid_deals.len());
+  463|      0|        rt.transaction(|st: &mut State, rt| {
+  464|      0|            let mut msm = st.mutator(rt.store());
+  465|      0|            msm.with_pending_proposals(Permission::Write)
+  466|      0|                .with_deal_proposals(Permission::Write)
+  467|      0|                .with_deals_by_epoch(Permission::Write)
+  468|      0|                .with_escrow_table(Permission::Write)
+  469|      0|                .with_locked_table(Permission::Write)
+  470|      0|                .build()
+  471|      0|                .map_err(|e| {
+  472|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  473|      0|                })?;
+  474|       |            // All storage dealProposals will be added in an atomic transaction; this operation will be unrolled if any of them fails.
+  475|       |            // This should only fail on programmer error because all expected invalid conditions should be filtered in the first set of checks.
+  476|      0|            for (vid, valid_deal) in valid_deals.iter().enumerate() {
+  477|      0|                msm.lock_client_and_provider_balances(&valid_deal.proposal)?;
+  478|       |
+  479|      0|                let id = msm.generate_storage_deal_id();
+  480|      0|
+  481|      0|                let pcid = valid_proposal_cids[vid];
+  482|      0|
+  483|      0|                msm.pending_deals
+  484|      0|                    .as_mut()
+  485|      0|                    .unwrap()
+  486|      0|                    .put(pcid.to_bytes().into())
+  487|      0|                    .map_err(|e| {
+  488|      0|                        e.downcast_default(ExitCode::ErrIllegalState, "failed to set pending deal")
+  489|      0|                    })?;
+  490|      0|                msm.deal_proposals
+  491|      0|                    .as_mut()
+  492|      0|                    .unwrap()
+  493|      0|                    .set(id, valid_deal.proposal.clone())
+  494|      0|                    .map_err(|e| {
+  495|      0|                        e.downcast_default(ExitCode::ErrIllegalState, "failed to set deal")
+  496|      0|                    })?;
+  497|       |
+  498|       |                // We randomize the first epoch for when the deal will be processed so an attacker isn't able to
+  499|       |                // schedule too many deals for the same tick.
+  500|      0|                let process_epoch = gen_rand_next_epoch(valid_deal.proposal.start_epoch, id);
+  501|      0|
+  502|      0|                msm.deals_by_epoch
+  503|      0|                    .as_mut()
+  504|      0|                    .unwrap()
+  505|      0|                    .put(process_epoch, id)
+  506|      0|                    .map_err(|e| {
+  507|      0|                        e.downcast_default(
+  508|      0|                            ExitCode::ErrIllegalState,
+  509|      0|                            "failed to set deal ops by epoch",
+  510|      0|                        )
+  511|      0|                    })?;
+  512|       |
+  513|      0|                new_deal_ids.push(id);
+  514|       |            }
+  515|       |
+  516|      0|            msm.commit_state().map_err(|e| {
+  517|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+  518|      0|            })?;
+  519|      0|            Ok(())
+  520|      0|        })?;
+  521|       |
+  522|      0|        Ok(PublishStorageDealsReturn {
+  523|      0|            ids: new_deal_ids,
+  524|      0|            valid_deals: valid_input_bf,
+  525|      0|        })
+  526|      0|    }
+  527|       |
+  528|       |    /// Verify that a given set of storage deals is valid for a sector currently being PreCommitted
+  529|       |    /// and return DealWeight of the set of storage deals given.
+  530|       |    /// The weight is defined as the sum, over all deals in the set, of the product of deal size
+  531|       |    /// and duration.
+  532|       |    fn verify_deals_for_activation<BS, RT>(
+  533|       |        rt: &mut RT,
+  534|       |        params: VerifyDealsForActivationParams,
+  535|       |    ) -> Result<VerifyDealsForActivationReturn, ActorError>
+  536|       |    where
+  537|       |        BS: Blockstore,
+  538|       |        RT: Runtime<BS>,
+  539|       |    {
+  540|      0|        rt.validate_immediate_caller_type(std::iter::once(&*MINER_ACTOR_CODE_ID))?;
+  541|      0|        let miner_addr = rt.message().caller();
+  542|      0|        let curr_epoch = rt.curr_epoch();
+  543|       |
+  544|      0|        let st: State = rt.state()?;
+  545|      0|        let proposals = DealArray::load(&st.proposals, rt.store()).map_err(|e| {
+  546|      0|            e.downcast_default(ExitCode::ErrIllegalState, "failed to load deal proposals")
+  547|      0|        })?;
+  548|       |
+  549|      0|        let mut weights = Vec::with_capacity(params.sectors.len());
+  550|      0|        for sector in params.sectors.iter() {
+  551|      0|            let (deal_weight, verified_deal_weight, deal_space) = validate_and_compute_deal_weight(
+  552|      0|                &proposals,
+  553|      0|                &sector.deal_ids,
+  554|      0|                &miner_addr,
+  555|      0|                sector.sector_expiry,
+  556|      0|                curr_epoch,
+  557|      0|            )
+  558|      0|            .map_err(|e| {
+  559|      0|                e.downcast_default(
+  560|      0|                    ExitCode::ErrIllegalState,
+  561|      0|                    "failed to validate deal proposals for activation",
+  562|      0|                )
+  563|      0|            })?;
+  564|      0|            weights.push(SectorWeights {
+  565|      0|                deal_space,
+  566|      0|                deal_weight,
+  567|      0|                verified_deal_weight,
+  568|      0|            });
+  569|       |        }
+  570|       |
+  571|      0|        Ok(VerifyDealsForActivationReturn { sectors: weights })
+  572|      0|    }
+  573|       |
+  574|       |    /// Verify that a given set of storage deals is valid for a sector currently being ProveCommitted,
+  575|       |    /// update the market's internal state accordingly.
+  576|       |    fn activate_deals<BS, RT>(rt: &mut RT, params: ActivateDealsParams) -> Result<(), ActorError>
+  577|       |    where
+  578|       |        BS: Blockstore,
+  579|       |        RT: Runtime<BS>,
+  580|       |    {
+  581|      0|        rt.validate_immediate_caller_type(std::iter::once(&*MINER_ACTOR_CODE_ID))?;
+  582|      0|        let miner_addr = rt.message().caller();
+  583|      0|        let curr_epoch = rt.curr_epoch();
+  584|      0|
+  585|      0|        // Update deal states
+  586|      0|        rt.transaction(|st: &mut State, rt| {
+  587|      0|            validate_deals_for_activation(
+  588|      0|                st,
+  589|      0|                rt.store(),
+  590|      0|                &params.deal_ids,
+  591|      0|                &miner_addr,
+  592|      0|                params.sector_expiry,
+  593|      0|                curr_epoch,
+  594|      0|            )
+  595|      0|            .map_err(|e| {
+  596|      0|                e.downcast_default(
+  597|      0|                    ExitCode::ErrIllegalState,
+  598|      0|                    "failed to validate deal proposals for activation",
+  599|      0|                )
+  600|      0|            })?;
+  601|       |
+  602|      0|            let mut msm = st.mutator(rt.store());
+  603|      0|            msm.with_deal_states(Permission::Write)
+  604|      0|                .with_pending_proposals(Permission::ReadOnly)
+  605|      0|                .with_deal_proposals(Permission::ReadOnly)
+  606|      0|                .build()
+  607|      0|                .map_err(|e| {
+  608|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  609|      0|                })?;
+  610|       |
+  611|      0|            for deal_id in params.deal_ids {
+  612|       |                // This construction could be replaced with a single "update deal state"
+  613|       |                // state method, possibly batched over all deal ids at once.
+  614|      0|                let s = msm
+  615|      0|                    .deal_states
+  616|      0|                    .as_ref()
+  617|      0|                    .unwrap()
+  618|      0|                    .get(deal_id)
+  619|      0|                    .map_err(|e| {
+  620|      0|                        e.downcast_default(
+  621|      0|                            ExitCode::ErrIllegalState,
+  622|      0|                            format!("failed to get state for deal_id ({})", deal_id),
+  623|      0|                        )
+  624|      0|                    })?;
+  625|      0|                if s.is_some() {
+  626|      0|                    return Err(actor_error!(
+  627|      0|                        ErrIllegalArgument,
+  628|      0|                        "deal {} already included in another sector",
+  629|      0|                        deal_id
+  630|      0|                    ));
+  631|      0|                }
+  632|       |
+  633|      0|                let proposal = msm
+  634|      0|                    .deal_proposals
+  635|      0|                    .as_ref()
+  636|      0|                    .unwrap()
+  637|      0|                    .get(deal_id)
+  638|      0|                    .map_err(|e| {
+  639|      0|                        e.downcast_default(
+  640|      0|                            ExitCode::ErrIllegalState,
+  641|      0|                            format!("failed to get deal_id ({})", deal_id),
+  642|      0|                        )
+  643|      0|                    })?
+  644|      0|                    .ok_or_else(|| actor_error!(ErrNotFound, "no such deal_id: {}", deal_id))?;
+  645|       |
+  646|      0|                let propc = proposal
+  647|      0|                    .cid()
+  648|      0|                    .map_err(|e| ActorError::from(e).wrap("failed to calculate proposal Cid"))?;
+  649|       |
+  650|      0|                let has = msm
+  651|      0|                    .pending_deals
+  652|      0|                    .as_ref()
+  653|      0|                    .unwrap()
+  654|      0|                    .has(&propc.to_bytes())
+  655|      0|                    .map_err(|e| {
+  656|      0|                        e.downcast_default(
+  657|      0|                            ExitCode::ErrIllegalState,
+  658|      0|                            format!("failed to get pending proposal ({})", propc),
+  659|      0|                        )
+  660|      0|                    })?;
+  661|       |
+  662|      0|                if !has {
+  663|      0|                    return Err(actor_error!(
+  664|      0|                        ErrIllegalState,
+  665|      0|                        "tried to activate deal that was not in the pending set ({})",
+  666|      0|                        propc
+  667|      0|                    ));
+  668|      0|                }
+  669|      0|
+  670|      0|                msm.deal_states
+  671|      0|                    .as_mut()
+  672|      0|                    .unwrap()
+  673|      0|                    .set(
+  674|      0|                        deal_id,
+  675|      0|                        DealState {
+  676|      0|                            sector_start_epoch: curr_epoch,
+  677|      0|                            last_updated_epoch: EPOCH_UNDEFINED,
+  678|      0|                            slash_epoch: EPOCH_UNDEFINED,
+  679|      0|                        },
+  680|      0|                    )
+  681|      0|                    .map_err(|e| {
+  682|      0|                        e.downcast_default(
+  683|      0|                            ExitCode::ErrIllegalState,
+  684|      0|                            format!("failed to set deal state {}", deal_id),
+  685|      0|                        )
+  686|      0|                    })?;
+  687|       |            }
+  688|       |
+  689|      0|            msm.commit_state().map_err(|e| {
+  690|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+  691|      0|            })?;
+  692|      0|            Ok(())
+  693|      0|        })?;
+  694|       |
+  695|      0|        Ok(())
+  696|      0|    }
+  697|       |
+  698|       |    /// Terminate a set of deals in response to their containing sector being terminated.
+  699|       |    /// Slash provider collateral, refund client collateral, and refund partial unpaid escrow
+  700|       |    /// amount to client.
+  701|       |    fn on_miner_sectors_terminate<BS, RT>(
+  702|       |        rt: &mut RT,
+  703|       |        params: OnMinerSectorsTerminateParams,
+  704|       |    ) -> Result<(), ActorError>
+  705|       |    where
+  706|       |        BS: Blockstore,
+  707|       |        RT: Runtime<BS>,
+  708|       |    {
+  709|      0|        rt.validate_immediate_caller_type(std::iter::once(&*MINER_ACTOR_CODE_ID))?;
+  710|      0|        let miner_addr = rt.message().caller();
+  711|      0|
+  712|      0|        rt.transaction(|st: &mut State, rt| {
+  713|      0|            let mut msm = st.mutator(rt.store());
+  714|      0|            msm.with_deal_states(Permission::Write)
+  715|      0|                .with_deal_proposals(Permission::ReadOnly)
+  716|      0|                .build()
+  717|      0|                .map_err(|e| {
+  718|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  719|      0|                })?;
+  720|       |
+  721|      0|            for id in params.deal_ids {
+  722|      0|                let deal = msm.deal_proposals.as_ref().unwrap().get(id).map_err(|e| {
+  723|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to get deal proposal")
+  724|      0|                })?;
+  725|       |                // The deal may have expired and been deleted before the sector is terminated.
+  726|       |                // Nothing to do, but continue execution for the other deals.
+  727|      0|                if deal.is_none() {
+  728|      0|                    info!("couldn't find deal {}", id);
+  729|      0|                    continue;
+  730|      0|                }
+  731|      0|                let deal = deal.unwrap();
+  732|      0|
+  733|      0|                if deal.provider != miner_addr {
+  734|      0|                    return Err(actor_error!(
+  735|      0|                        ErrIllegalState,
+  736|      0|                        "caller {} is not the provider {} of deal {}",
+  737|      0|                        miner_addr,
+  738|      0|                        deal.provider,
+  739|      0|                        id
+  740|      0|                    ));
+  741|      0|                }
+  742|      0|
+  743|      0|                // do not slash expired deals
+  744|      0|                if deal.end_epoch <= params.epoch {
+  745|      0|                    info!("deal {} expired, not slashing", id);
+  746|      0|                    continue;
+  747|      0|                }
+  748|       |
+  749|      0|                let mut state: DealState = *msm
+  750|      0|                    .deal_states
+  751|      0|                    .as_ref()
+  752|      0|                    .unwrap()
+  753|      0|                    .get(id)
+  754|      0|                    .map_err(|e| {
+  755|      0|                        e.downcast_default(ExitCode::ErrIllegalState, "failed to get deal state")
+  756|      0|                    })?
+  757|       |                    // A deal with a proposal but no state is not activated, but then it should not be
+  758|       |                    // part of a sector that is terminating.
+  759|      0|                    .ok_or_else(|| actor_error!(ErrIllegalArgument, "no state for deal {}", id))?;
+  760|       |
+  761|       |                // If a deal is already slashed, don't need to do anything
+  762|      0|                if state.slash_epoch != EPOCH_UNDEFINED {
+  763|      0|                    info!("deal {}, already slashed", id);
+  764|      0|                    continue;
+  765|      0|                }
+  766|      0|
+  767|      0|                // mark the deal for slashing here. Actual releasing of locked funds for the client
+  768|      0|                // and slashing of provider collateral happens in cron_tick.
+  769|      0|                state.slash_epoch = params.epoch;
+  770|      0|
+  771|      0|                msm.deal_states
+  772|      0|                    .as_mut()
+  773|      0|                    .unwrap()
+  774|      0|                    .set(id, state)
+  775|      0|                    .map_err(|e| {
+  776|      0|                        e.downcast_default(
+  777|      0|                            ExitCode::ErrIllegalState,
+  778|      0|                            format!("failed to set deal state ({})", id),
+  779|      0|                        )
+  780|      0|                    })?;
+  781|       |            }
+  782|       |
+  783|      0|            msm.commit_state().map_err(|e| {
+  784|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+  785|      0|            })?;
+  786|      0|            Ok(())
+  787|      0|        })?;
+  788|      0|        Ok(())
+  789|      0|    }
+  790|       |
+  791|       |    fn compute_data_commitment<BS, RT>(
+  792|       |        rt: &mut RT,
+  793|       |        params: ComputeDataCommitmentParams,
+  794|       |    ) -> Result<ComputeDataCommitmentReturn, ActorError>
+  795|       |    where
+  796|       |        BS: Blockstore,
+  797|       |        RT: Runtime<BS>,
+  798|       |    {
+  799|      0|        rt.validate_immediate_caller_type(std::iter::once(&*MINER_ACTOR_CODE_ID))?;
+  800|       |
+  801|      0|        let st: State = rt.state()?;
+  802|       |
+  803|      0|        let proposals = DealArray::load(&st.proposals, rt.store()).map_err(|e| {
+  804|      0|            e.downcast_default(ExitCode::ErrIllegalState, "failed to load deal proposals")
+  805|      0|        })?;
+  806|      0|        let mut commds = Vec::with_capacity(params.inputs.len());
+  807|      0|        for comm_input in params.inputs.iter() {
+  808|      0|            let mut pieces: Vec<PieceInfo> = Vec::with_capacity(comm_input.deal_ids.len());
+  809|      0|            for deal_id in &comm_input.deal_ids {
+  810|      0|                let deal = proposals
+  811|      0|                    .get(*deal_id)
+  812|      0|                    .map_err(|e| {
+  813|      0|                        e.downcast_default(
+  814|      0|                            ExitCode::ErrIllegalState,
+  815|      0|                            format!("failed to get deal_id ({})", deal_id),
+  816|      0|                        )
+  817|      0|                    })?
+  818|      0|                    .ok_or_else(|| {
+  819|      0|                        actor_error!(ErrNotFound, "proposal doesn't exist ({})", deal_id)
+  820|      0|                    })?;
+  821|      0|                pieces.push(PieceInfo {
+  822|      0|                    cid: deal.piece_cid,
+  823|      0|                    size: deal.piece_size,
+  824|      0|                });
+  825|       |            }
+  826|      0|            let commd = rt
+  827|      0|                .compute_unsealed_sector_cid(comm_input.sector_type, &pieces)
+  828|      0|                .map_err(|e| {
+  829|      0|                    e.downcast_default(
+  830|      0|                        ExitCode::ErrIllegalArgument,
+  831|      0|                        "failed to compute unsealed sector CID",
+  832|      0|                    )
+  833|      0|                })?;
+  834|      0|            commds.push(commd);
+  835|       |        }
+  836|       |
+  837|      0|        Ok(ComputeDataCommitmentReturn { commds })
+  838|      0|    }
+  839|       |
+  840|       |    fn cron_tick<BS, RT>(rt: &mut RT) -> Result<(), ActorError>
+  841|       |    where
+  842|       |        BS: Blockstore,
+  843|       |        RT: Runtime<BS>,
+  844|       |    {
+  845|      0|        rt.validate_immediate_caller_is(std::iter::once(&*CRON_ACTOR_ADDR))?;
+  846|       |
+  847|      0|        let mut amount_slashed = BigInt::zero();
+  848|      0|        let curr_epoch = rt.curr_epoch();
+  849|      0|        let mut timed_out_verified_deals: Vec<DealProposal> = Vec::new();
+  850|      0|
+  851|      0|        rt.transaction(|st: &mut State, rt| {
+  852|      0|            let last_cron = st.last_cron;
+  853|      0|            let mut updates_needed: BTreeMap<ChainEpoch, Vec<DealID>> = BTreeMap::new();
+  854|      0|            let mut msm = st.mutator(rt.store());
+  855|      0|            msm.with_deal_states(Permission::Write)
+  856|      0|                .with_locked_table(Permission::Write)
+  857|      0|                .with_escrow_table(Permission::Write)
+  858|      0|                .with_deals_by_epoch(Permission::Write)
+  859|      0|                .with_deal_proposals(Permission::Write)
+  860|      0|                .with_pending_proposals(Permission::Write)
+  861|      0|                .build()
+  862|      0|                .map_err(|e| {
+  863|      0|                    e.downcast_default(ExitCode::ErrIllegalState, "failed to load state")
+  864|      0|                })?;
+  865|       |
+  866|      0|            for i in (last_cron + 1)..=rt.curr_epoch() {
+  867|       |                // TODO specs-actors modifies msm as it's iterated through, which is memory unsafe
+  868|       |                // for now the deal ids are being collected and then iterated on, which could
+  869|       |                // cause a potential inconsistency in exit code returned if a deal_id fails
+  870|       |                // to be pulled from storage where it wouldn't be triggered otherwise.
+  871|       |                // Workaround a better solution (seperating msm or fixing go impl)
+  872|      0|                let mut deal_ids = Vec::new();
+  873|      0|                msm.deals_by_epoch
+  874|      0|                    .as_ref()
+  875|      0|                    .unwrap()
+  876|      0|                    .for_each(i, |deal_id| {
+  877|      0|                        deal_ids.push(deal_id);
+  878|      0|                        Ok(())
+  879|      0|                    })
+  880|      0|                    .map_err(|e| {
+  881|      0|                        e.downcast_default(ExitCode::ErrIllegalState, "failed to set deal state")
+  882|      0|                    })?;
+  883|       |
+  884|      0|                for deal_id in deal_ids {
+  885|      0|                    let deal = msm
+  886|      0|                        .deal_proposals
+  887|      0|                        .as_ref()
+  888|      0|                        .unwrap()
+  889|      0|                        .get(deal_id)
+  890|      0|                        .map_err(|e| {
+  891|      0|                            e.downcast_default(
+  892|      0|                                ExitCode::ErrIllegalState,
+  893|      0|                                format!("failed to get deal_id ({})", deal_id),
+  894|      0|                            )
+  895|      0|                        })?
+  896|      0|                        .ok_or_else(|| {
+  897|      0|                            actor_error!(ErrNotFound, "proposal doesn't exist ({})", deal_id)
+  898|      0|                        })?
+  899|      0|                        .clone();
+  900|       |
+  901|      0|                    let dcid = deal.cid().map_err(|e| {
+  902|      0|                        ActorError::from(e)
+  903|      0|                            .wrap(format!("failed to calculate cid for proposal {}", deal_id))
+  904|      0|                    })?;
+  905|       |
+  906|      0|                    let state = msm
+  907|      0|                        .deal_states
+  908|      0|                        .as_ref()
+  909|      0|                        .unwrap()
+  910|      0|                        .get(deal_id)
+  911|      0|                        .map_err(|e| {
+  912|      0|                            e.downcast_default(
+  913|      0|                                ExitCode::ErrIllegalState,
+  914|      0|                                "failed to get deal state",
+  915|      0|                            )
+  916|      0|                        })?
+  917|      0|                        .cloned();
+  918|      0|
+  919|      0|                    // deal has been published but not activated yet -> terminate it
+  920|      0|                    // as it has timed out
+  921|      0|                    if state.is_none() {
+  922|       |                        // Not yet appeared in proven sector; check for timeout.
+  923|      0|                        if curr_epoch < deal.start_epoch {
+  924|      0|                            return Err(actor_error!(
+  925|      0|                                ErrIllegalState,
+  926|      0|                                "deal {} processed before start epoch {}",
+  927|      0|                                deal_id,
+  928|      0|                                deal.start_epoch
+  929|      0|                            ));
+  930|      0|                        }
+  931|       |
+  932|      0|                        let slashed = msm.process_deal_init_timed_out(&deal)?;
+  933|      0|                        if !slashed.is_zero() {
+  934|      0|                            amount_slashed += slashed;
+  935|      0|                        }
+  936|      0|                        if deal.verified_deal {
+  937|      0|                            timed_out_verified_deals.push(deal);
+  938|      0|                        }
+  939|       |
+  940|       |                        // Delete the proposal (but not state, which doesn't exist).
+  941|      0|                        let deleted = msm
+  942|      0|                            .deal_proposals
+  943|      0|                            .as_mut()
+  944|      0|                            .unwrap()
+  945|      0|                            .delete(deal_id)
+  946|      0|                            .map_err(|e| {
+  947|      0|                                e.downcast_default(
+  948|      0|                                    ExitCode::ErrIllegalState,
+  949|      0|                                    format!("failed to delete deal proposal {}", deal_id),
+  950|      0|                                )
+  951|      0|                            })?;
+  952|      0|                        if deleted.is_none() {
+  953|      0|                            return Err(actor_error!(
+  954|      0|                                ErrIllegalState,
+  955|      0|                                format!(
+  956|      0|                                    "failed to delete deal {} proposal {}: does not exist",
+  957|      0|                                    deal_id, dcid
+  958|      0|                                )
+  959|      0|                            ));
+  960|      0|                        }
+  961|      0|                        msm.pending_deals
+  962|      0|                            .as_mut()
+  963|      0|                            .unwrap()
+  964|      0|                            .delete(&dcid.to_bytes())
+  965|      0|                            .map_err(|e| {
+  966|      0|                                e.downcast_default(
+  967|      0|                                    ExitCode::ErrIllegalState,
+  968|      0|                                    format!("failed to delete pending proposal {}", deal_id),
+  969|      0|                                )
+  970|      0|                            })?
+  971|      0|                            .ok_or_else(|| {
+  972|      0|                                actor_error!(
+  973|      0|                                    ErrIllegalState,
+  974|      0|                                    "failed to delete pending proposal: does not exist"
+  975|      0|                                )
+  976|      0|                            })?;
+  977|       |
+  978|      0|                        continue;
+  979|      0|                    }
+  980|      0|                    let mut state = state.unwrap();
+  981|      0|
+  982|      0|                    if state.last_updated_epoch == EPOCH_UNDEFINED {
+  983|      0|                        msm.pending_deals
+  984|      0|                            .as_mut()
+  985|      0|                            .unwrap()
+  986|      0|                            .delete(&dcid.to_bytes())
+  987|      0|                            .map_err(|e| {
+  988|      0|                                e.downcast_default(
+  989|      0|                                    ExitCode::ErrIllegalState,
+  990|      0|                                    format!("failed to delete pending proposal {}", dcid),
+  991|      0|                                )
+  992|      0|                            })?
+  993|      0|                            .ok_or_else(|| {
+  994|      0|                                actor_error!(
+  995|      0|                                    ErrIllegalState,
+  996|      0|                                    "failed to delete pending proposal: does not exist"
+  997|      0|                                )
+  998|      0|                            })?;
+  999|      0|                    }
+ 1000|       |
+ 1001|      0|                    let (slash_amount, next_epoch, remove_deal) =
+ 1002|      0|                        msm.update_pending_deal_state(&state, &deal, curr_epoch)?;
+ 1003|      0|                    if slash_amount.is_negative() {
+ 1004|      0|                        return Err(actor_error!(
+ 1005|      0|                            ErrIllegalState,
+ 1006|      0|                            format!(
+ 1007|      0|                                "computed negative slash amount {} for deal {}",
+ 1008|      0|                                slash_amount, deal_id
+ 1009|      0|                            )
+ 1010|      0|                        ));
+ 1011|      0|                    }
+ 1012|      0|
+ 1013|      0|                    if remove_deal {
+ 1014|      0|                        if next_epoch != EPOCH_UNDEFINED {
+ 1015|      0|                            return Err(actor_error!(
+ 1016|      0|                                ErrIllegalState,
+ 1017|      0|                                format!(
+ 1018|      0|                                    "removed deal {} should have no scheduled epoch (got {})",
+ 1019|      0|                                    deal_id, next_epoch
+ 1020|      0|                                )
+ 1021|      0|                            ));
+ 1022|      0|                        }
+ 1023|      0|
+ 1024|      0|                        amount_slashed += slash_amount;
+ 1025|       |
+ 1026|       |                        // Delete proposal and state simultaneously.
+ 1027|      0|                        let deleted =
+ 1028|      0|                            msm.deal_states
+ 1029|      0|                                .as_mut()
+ 1030|      0|                                .unwrap()
+ 1031|      0|                                .delete(deal_id)
+ 1032|      0|                                .map_err(|e| {
+ 1033|      0|                                    e.downcast_default(
+ 1034|      0|                                        ExitCode::ErrIllegalState,
+ 1035|      0|                                        "failed to delete deal state",
+ 1036|      0|                                    )
+ 1037|      0|                                })?;
+ 1038|      0|                        if deleted.is_none() {
+ 1039|      0|                            return Err(actor_error!(
+ 1040|      0|                                ErrIllegalState,
+ 1041|      0|                                "failed to delete deal state: does not exist"
+ 1042|      0|                            ));
+ 1043|      0|                        }
+ 1044|       |
+ 1045|      0|                        let deleted = msm
+ 1046|      0|                            .deal_proposals
+ 1047|      0|                            .as_mut()
+ 1048|      0|                            .unwrap()
+ 1049|      0|                            .delete(deal_id)
+ 1050|      0|                            .map_err(|e| {
+ 1051|      0|                                e.downcast_default(
+ 1052|      0|                                    ExitCode::ErrIllegalState,
+ 1053|      0|                                    "failed to delete deal proposal",
+ 1054|      0|                                )
+ 1055|      0|                            })?;
+ 1056|      0|                        if deleted.is_none() {
+ 1057|      0|                            return Err(actor_error!(
+ 1058|      0|                                ErrIllegalState,
+ 1059|      0|                                "failed to delete deal proposal: does not exist"
+ 1060|      0|                            ));
+ 1061|      0|                        }
+ 1062|       |                    } else {
+ 1063|      0|                        if next_epoch <= rt.curr_epoch() {
+ 1064|      0|                            return Err(actor_error!(
+ 1065|      0|                                ErrIllegalState,
+ 1066|      0|                                "continuing deal {} next epoch {} should be in the future",
+ 1067|      0|                                deal_id,
+ 1068|      0|                                next_epoch
+ 1069|      0|                            ));
+ 1070|      0|                        }
+ 1071|      0|                        if !slash_amount.is_zero() {
+ 1072|      0|                            return Err(actor_error!(
+ 1073|      0|                                ErrIllegalState,
+ 1074|      0|                                "continuing deal {} should not be slashed",
+ 1075|      0|                                deal_id
+ 1076|      0|                            ));
+ 1077|      0|                        }
+ 1078|      0|
+ 1079|      0|                        state.last_updated_epoch = curr_epoch;
+ 1080|      0|                        msm.deal_states
+ 1081|      0|                            .as_mut()
+ 1082|      0|                            .unwrap()
+ 1083|      0|                            .set(deal_id, state)
+ 1084|      0|                            .map_err(|e| {
+ 1085|      0|                                e.downcast_default(
+ 1086|      0|                                    ExitCode::ErrIllegalState,
+ 1087|      0|                                    "failed to set deal state",
+ 1088|      0|                                )
+ 1089|      0|                            })?;
+ 1090|       |
+ 1091|      0|                        if let Some(ev) = updates_needed.get_mut(&next_epoch) {
+ 1092|      0|                            ev.push(deal_id);
+ 1093|      0|                        } else {
+ 1094|      0|                            updates_needed.insert(next_epoch, vec![deal_id]);
+ 1095|      0|                        }
+ 1096|       |                    }
+ 1097|       |                }
+ 1098|      0|                msm.deals_by_epoch
+ 1099|      0|                    .as_mut()
+ 1100|      0|                    .unwrap()
+ 1101|      0|                    .remove_all(i)
+ 1102|      0|                    .map_err(|e| {
+ 1103|      0|                        e.downcast_default(
+ 1104|      0|                            ExitCode::ErrIllegalState,
+ 1105|      0|                            format!("failed to delete deal ops for epoch {}", i),
+ 1106|      0|                        )
+ 1107|      0|                    })?;
+ 1108|       |            }
+ 1109|       |
+ 1110|       |            // updates_needed is already sorted by epoch.
+ 1111|      0|            for (epoch, deals) in updates_needed {
+ 1112|      0|                msm.deals_by_epoch
+ 1113|      0|                    .as_mut()
+ 1114|      0|                    .unwrap()
+ 1115|      0|                    .put_many(epoch, &deals)
+ 1116|      0|                    .map_err(|e| {
+ 1117|      0|                        e.downcast_default(
+ 1118|      0|                            ExitCode::ErrIllegalState,
+ 1119|      0|                            format!("failed to reinsert deal IDs for epoch {}", epoch),
+ 1120|      0|                        )
+ 1121|      0|                    })?;
+ 1122|       |            }
+ 1123|       |
+ 1124|      0|            msm.st.last_cron = rt.curr_epoch();
+ 1125|      0|
+ 1126|      0|            msm.commit_state().map_err(|e| {
+ 1127|      0|                e.downcast_default(ExitCode::ErrIllegalState, "failed to flush state")
+ 1128|      0|            })?;
+ 1129|      0|            Ok(())
+ 1130|      0|        })?;
+ 1131|       |
+ 1132|      0|        for d in timed_out_verified_deals {
+ 1133|      0|            let res = rt.send(
+ 1134|      0|                *VERIFIED_REGISTRY_ACTOR_ADDR,
+ 1135|      0|                ext::verifreg::RESTORE_BYTES_METHOD,
+ 1136|      0|                RawBytes::serialize(ext::verifreg::RestoreBytesParams {
+ 1137|      0|                    address: d.client,
+ 1138|      0|                    deal_size: BigInt::from(d.piece_size.0),
+ 1139|      0|                })?,
+ 1140|      0|                TokenAmount::zero(),
+ 1141|       |            );
+ 1142|      0|            if let Err(e) = res {
+ 1143|      0|                log::error!(
+ 1144|      0|                    "failed to send RestoreBytes call to the verifreg actor for timed \
+ 1145|      0|                    out verified deal, client: {}, deal_size: {}, provider: {}, got code: {:?}. {}",
+ 1146|      0|                    d.client,
+ 1147|      0|                    d.piece_size.0,
+ 1148|      0|                    d.provider,
+ 1149|      0|                    e.exit_code(),
+ 1150|      0|                    e.msg()
+ 1151|       |                );
+ 1152|      0|            }
+ 1153|       |        }
+ 1154|       |
+ 1155|      0|        if !amount_slashed.is_zero() {
+ 1156|      0|            rt.send(
+ 1157|      0|                *BURNT_FUNDS_ACTOR_ADDR,
+ 1158|      0|                METHOD_SEND,
+ 1159|      0|                RawBytes::default(),
+ 1160|      0|                amount_slashed,
+ 1161|      0|            )?;
+ 1162|      0|        }
+ 1163|      0|        Ok(())
+ 1164|      0|    }
+ 1165|       |}
+ 1166|       |
+ 1167|       |/// Validates a collection of deal dealProposals for activation, and returns their combined weight,
+ 1168|       |/// split into regular deal weight and verified deal weight.
+ 1169|      0|pub fn validate_deals_for_activation<BS>(
+ 1170|      0|    st: &State,
+ 1171|      0|    store: &BS,
+ 1172|      0|    deal_ids: &[DealID],
+ 1173|      0|    miner_addr: &Address,
+ 1174|      0|    sector_expiry: ChainEpoch,
+ 1175|      0|    curr_epoch: ChainEpoch,
+ 1176|      0|) -> anyhow::Result<(BigInt, BigInt, u64)>
+ 1177|      0|where
+ 1178|      0|    BS: Blockstore,
+ 1179|      0|{
+ 1180|      0|    let proposals = DealArray::load(&st.proposals, store)?;
+ 1181|       |
+ 1182|      0|    validate_and_compute_deal_weight(&proposals, deal_ids, miner_addr, sector_expiry, curr_epoch)
+ 1183|      0|}
+ 1184|       |
+ 1185|      0|pub fn validate_and_compute_deal_weight<BS>(
+ 1186|      0|    proposals: &DealArray<BS>,
+ 1187|      0|    deal_ids: &[DealID],
+ 1188|      0|    miner_addr: &Address,
+ 1189|      0|    sector_expiry: ChainEpoch,
+ 1190|      0|    sector_activation: ChainEpoch,
+ 1191|      0|) -> anyhow::Result<(BigInt, BigInt, u64)>
+ 1192|      0|where
+ 1193|      0|    BS: Blockstore,
+ 1194|      0|{
+ 1195|      0|    let mut seen_deal_ids = BTreeSet::new();
+ 1196|      0|    let mut total_deal_space = 0;
+ 1197|      0|    let mut total_deal_space_time = BigInt::zero();
+ 1198|      0|    let mut total_verified_space_time = BigInt::zero();
+ 1199|      0|    for deal_id in deal_ids {
+ 1200|      0|        if !seen_deal_ids.insert(deal_id) {
+ 1201|      0|            return Err(actor_error!(
+ 1202|      0|                ErrIllegalArgument,
+ 1203|      0|                "deal id {} present multiple times",
+ 1204|      0|                deal_id
+ 1205|      0|            )
+ 1206|      0|            .into());
+ 1207|      0|        }
+ 1208|      0|        let proposal = proposals
+ 1209|      0|            .get(*deal_id)?
+ 1210|      0|            .ok_or_else(|| actor_error!(ErrNotFound, "no such deal {}", deal_id))?;
+ 1211|       |
+ 1212|      0|        validate_deal_can_activate(proposal, miner_addr, sector_expiry, sector_activation)
+ 1213|      0|            .map_err(|e| e.wrap(&format!("cannot activate deal {}", deal_id)))?;
+ 1214|       |
+ 1215|      0|        total_deal_space += proposal.piece_size.0;
+ 1216|      0|        let deal_space_time = deal_weight(proposal);
+ 1217|      0|        if proposal.verified_deal {
+ 1218|      0|            total_verified_space_time += deal_space_time;
+ 1219|      0|        } else {
+ 1220|      0|            total_deal_space_time += deal_space_time;
+ 1221|      0|        }
+ 1222|       |    }
+ 1223|       |
+ 1224|      0|    Ok((
+ 1225|      0|        total_deal_space_time,
+ 1226|      0|        total_verified_space_time,
+ 1227|      0|        total_deal_space,
+ 1228|      0|    ))
+ 1229|      0|}
+ 1230|       |
+ 1231|      0|fn gen_rand_next_epoch(start_epoch: ChainEpoch, deal_id: DealID) -> ChainEpoch {
+ 1232|      0|    let offset = deal_id as i64 % DEAL_UPDATES_INTERVAL;
+ 1233|      0|    let q = QuantSpec {
+ 1234|      0|        unit: DEAL_UPDATES_INTERVAL,
+ 1235|      0|        offset: 0,
+ 1236|      0|    };
+ 1237|      0|    let prev_day = q.quantize_down(start_epoch);
+ 1238|      0|    if prev_day + offset >= start_epoch {
+ 1239|      0|        return prev_day + offset;
+ 1240|      0|    }
+ 1241|      0|    let next_day = q.quantize_up(start_epoch);
+ 1242|      0|    next_day + offset
+ 1243|      0|}
+ 1244|       |////////////////////////////////////////////////////////////////////////////////
+ 1245|       |// Checks
+ 1246|       |////////////////////////////////////////////////////////////////////////////////
+ 1247|      0|fn validate_deal_can_activate(
+ 1248|      0|    proposal: &DealProposal,
+ 1249|      0|    miner_addr: &Address,
+ 1250|      0|    sector_expiration: ChainEpoch,
+ 1251|      0|    curr_epoch: ChainEpoch,
+ 1252|      0|) -> Result<(), ActorError> {
+ 1253|      0|    if &proposal.provider != miner_addr {
+ 1254|      0|        return Err(actor_error!(
+ 1255|      0|            ErrForbidden,
+ 1256|      0|            "proposal has provider {}, must be {}",
+ 1257|      0|            proposal.provider,
+ 1258|      0|            miner_addr
+ 1259|      0|        ));
+ 1260|      0|    };
+ 1261|      0|
+ 1262|      0|    if curr_epoch > proposal.start_epoch {
+ 1263|      0|        return Err(actor_error!(
+ 1264|      0|            ErrIllegalArgument,
+ 1265|      0|            "proposal start epoch {} has already elapsed at {}",
+ 1266|      0|            proposal.start_epoch,
+ 1267|      0|            curr_epoch
+ 1268|      0|        ));
+ 1269|      0|    };
+ 1270|      0|
+ 1271|      0|    if proposal.end_epoch > sector_expiration {
+ 1272|      0|        return Err(actor_error!(
+ 1273|      0|            ErrIllegalArgument,
+ 1274|      0|            "proposal expiration {} exceeds sector expiration {}",
+ 1275|      0|            proposal.end_epoch,
+ 1276|      0|            sector_expiration
+ 1277|      0|        ));
+ 1278|      0|    };
+ 1279|      0|
+ 1280|      0|    Ok(())
+ 1281|      0|}
+ 1282|       |
+ 1283|       |fn validate_deal<BS, RT>(
+ 1284|       |    rt: &RT,
+ 1285|       |    deal: &ClientDealProposal,
+ 1286|       |    network_raw_power: &StoragePower,
+ 1287|       |    baseline_power: &StoragePower,
+ 1288|       |) -> Result<(), ActorError>
+ 1289|       |where
+ 1290|       |    BS: Blockstore,
+ 1291|       |    RT: Runtime<BS>,
+ 1292|       |{
+ 1293|      0|    deal_proposal_is_internally_valid(rt, deal)?;
+ 1294|       |
+ 1295|      0|    let proposal = &deal.proposal;
+ 1296|      0|
+ 1297|      0|    if proposal.label.len() > DEAL_MAX_LABEL_SIZE {
+ 1298|      0|        return Err(actor_error!(
+ 1299|      0|            ErrIllegalArgument,
+ 1300|      0|            "deal label can be at most {} bytes, is {}",
+ 1301|      0|            DEAL_MAX_LABEL_SIZE,
+ 1302|      0|            proposal.label.len()
+ 1303|      0|        ));
+ 1304|      0|    }
+ 1305|      0|
+ 1306|      0|    proposal
+ 1307|      0|        .piece_size
+ 1308|      0|        .validate()
+ 1309|      0|        .map_err(|e| actor_error!(ErrIllegalArgument, "proposal piece size is invalid: {}", e))?;
+ 1310|       |
+ 1311|       |    // * we are skipping the check for if Cid is defined, but this shouldn't be possible
+ 1312|       |
+ 1313|      0|    if !is_piece_cid(&proposal.piece_cid) {
+ 1314|      0|        return Err(actor_error!(
+ 1315|      0|            ErrIllegalArgument,
+ 1316|      0|            "proposal PieceCID undefined"
+ 1317|      0|        ));
+ 1318|      0|    }
+ 1319|      0|
+ 1320|      0|    if proposal.end_epoch <= proposal.start_epoch {
+ 1321|      0|        return Err(actor_error!(
+ 1322|      0|            ErrIllegalArgument,
+ 1323|      0|            "proposal end before proposal start"
+ 1324|      0|        ));
+ 1325|      0|    }
+ 1326|      0|
+ 1327|      0|    if rt.curr_epoch() > proposal.start_epoch {
+ 1328|      0|        return Err(actor_error!(
+ 1329|      0|            ErrIllegalArgument,
+ 1330|      0|            "Deal start epoch has already elapsed."
+ 1331|      0|        ));
+ 1332|      0|    };
+ 1333|      0|
+ 1334|      0|    let (min_dur, max_dur) = deal_duration_bounds(proposal.piece_size);
+ 1335|      0|    if proposal.duration() < min_dur || proposal.duration() > max_dur {
+ 1336|      0|        return Err(actor_error!(
+ 1337|      0|            ErrIllegalArgument,
+ 1338|      0|            "Deal duration out of bounds."
+ 1339|      0|        ));
+ 1340|      0|    };
+ 1341|      0|
+ 1342|      0|    let (min_price, max_price) =
+ 1343|      0|        deal_price_per_epoch_bounds(proposal.piece_size, proposal.duration());
+ 1344|      0|    if proposal.storage_price_per_epoch < min_price || &proposal.storage_price_per_epoch > max_price
+ 1345|       |    {
+ 1346|      0|        return Err(actor_error!(
+ 1347|      0|            ErrIllegalArgument,
+ 1348|      0|            "Storage price out of bounds."
+ 1349|      0|        ));
+ 1350|      0|    };
+ 1351|      0|
+ 1352|      0|    let (min_provider_collateral, max_provider_collateral) = deal_provider_collateral_bounds(
+ 1353|      0|        proposal.piece_size,
+ 1354|      0|        network_raw_power,
+ 1355|      0|        baseline_power,
+ 1356|      0|        &rt.total_fil_circ_supply(),
+ 1357|      0|    );
+ 1358|      0|    if proposal.provider_collateral < min_provider_collateral
+ 1359|      0|        || proposal.provider_collateral > max_provider_collateral
+ 1360|       |    {
+ 1361|      0|        return Err(actor_error!(
+ 1362|      0|            ErrIllegalArgument,
+ 1363|      0|            "Provider collateral out of bounds."
+ 1364|      0|        ));
+ 1365|      0|    };
+ 1366|      0|
+ 1367|      0|    let (min_client_collateral, max_client_collateral) =
+ 1368|      0|        deal_client_collateral_bounds(proposal.piece_size, proposal.duration());
+ 1369|      0|    if proposal.client_collateral < min_client_collateral
+ 1370|      0|        || proposal.client_collateral > max_client_collateral
+ 1371|       |    {
+ 1372|      0|        return Err(actor_error!(
+ 1373|      0|            ErrIllegalArgument,
+ 1374|      0|            "Client collateral out of bounds."
+ 1375|      0|        ));
+ 1376|      0|    };
+ 1377|      0|
+ 1378|      0|    Ok(())
+ 1379|      0|}
+ 1380|       |
+ 1381|      0|fn deal_proposal_is_internally_valid<BS, RT>(
+ 1382|      0|    rt: &RT,
+ 1383|      0|    proposal: &ClientDealProposal,
+ 1384|      0|) -> Result<(), ActorError>
+ 1385|      0|where
+ 1386|      0|    BS: Blockstore,
+ 1387|      0|    RT: Runtime<BS>,
+ 1388|      0|{
+ 1389|       |    // Generate unsigned bytes
+ 1390|      0|    let sv_bz = to_vec(&proposal.proposal)
+ 1391|      0|        .map_err(|e| ActorError::from(e).wrap("failed to serialize DealProposal"))?;
+ 1392|       |
+ 1393|      0|    rt.verify_signature(
+ 1394|      0|        &proposal.client_signature,
+ 1395|      0|        &proposal.proposal.client,
+ 1396|      0|        &sv_bz,
+ 1397|      0|    )
+ 1398|      0|    .map_err(|e| e.downcast_default(ExitCode::ErrIllegalArgument, "signature proposal invalid"))?;
+ 1399|       |
+ 1400|      0|    Ok(())
+ 1401|      0|}
+ 1402|       |
+ 1403|       |/// Resolves a provider or client address to the canonical form against which a balance should be held, and
+ 1404|       |/// the designated recipient address of withdrawals (which is the same, for simple account parties).
+ 1405|      1|fn escrow_address<BS, RT>(
+ 1406|      1|    rt: &mut RT,
+ 1407|      1|    addr: &Address,
+ 1408|      1|) -> Result<(Address, Address, Vec<Address>), ActorError>
+ 1409|      1|where
+ 1410|      1|    BS: Blockstore,
+ 1411|      1|    RT: Runtime<BS>,
+ 1412|      1|{
+ 1413|       |    // Resolve the provided address to the canonical form against which the balance is held.
+ 1414|      1|    let nominal = rt
+ 1415|      1|        .resolve_address(addr)
+ 1416|      1|        .ok_or_else(|| actor_error!(ErrIllegalArgument, "failed to resolve address {}", addr))?;
+                                     ^0                                                                     ^0
+ 1417|       |
+ 1418|      1|    let code_id = rt
+ 1419|      1|        .get_actor_code_cid(&nominal)
+ 1420|      1|        .ok_or_else(|| actor_error!(ErrIllegalArgument, "no code for address {}", nominal))?;
+                                     ^0                                                                  ^0
+ 1421|       |
+ 1422|      1|    if code_id == *MINER_ACTOR_CODE_ID {
+ 1423|       |        // Storage miner actor entry; implied funds recipient is the associated owner address.
+ 1424|      1|        let (owner_addr, worker_addr, _) = request_miner_control_addrs(rt, nominal)?;
+                                                                                                 ^0
+ 1425|      1|        return Ok((nominal, owner_addr, vec![owner_addr, worker_addr]));
+ 1426|      0|    }
+ 1427|      0|
+ 1428|      0|    Ok((nominal, nominal, vec![nominal]))
+ 1429|      1|}
+ 1430|       |
+ 1431|       |/// Requests the current epoch target block reward from the reward actor.
+ 1432|      0|fn request_current_baseline_power<BS, RT>(rt: &mut RT) -> Result<StoragePower, ActorError>
+ 1433|      0|where
+ 1434|      0|    BS: Blockstore,
+ 1435|      0|    RT: Runtime<BS>,
+ 1436|      0|{
+ 1437|      0|    let rwret = rt.send(
+ 1438|      0|        *REWARD_ACTOR_ADDR,
+ 1439|      0|        ext::reward::THIS_EPOCH_REWARD_METHOD,
+ 1440|      0|        RawBytes::default(),
+ 1441|      0|        0.into(),
+ 1442|      0|    )?;
+ 1443|      0|    let ret: ThisEpochRewardReturn = rwret.deserialize()?;
+ 1444|      0|    Ok(ret.this_epoch_baseline_power)
+ 1445|      0|}
+ 1446|       |
+ 1447|       |/// Requests the current network total power and pledge from the power actor.
+ 1448|       |/// Returns a tuple of (raw_power, qa_power).
+ 1449|      0|fn request_current_network_power<BS, RT>(
+ 1450|      0|    rt: &mut RT,
+ 1451|      0|) -> Result<(StoragePower, StoragePower), ActorError>
+ 1452|      0|where
+ 1453|      0|    BS: Blockstore,
+ 1454|      0|    RT: Runtime<BS>,
+ 1455|      0|{
+ 1456|      0|    let rwret = rt.send(
+ 1457|      0|        *STORAGE_POWER_ACTOR_ADDR,
+ 1458|      0|        ext::power::CURRENT_TOTAL_POWER_METHOD,
+ 1459|      0|        RawBytes::default(),
+ 1460|      0|        0.into(),
+ 1461|      0|    )?;
+ 1462|      0|    let ret: ext::power::CurrentTotalPowerReturnParams = rwret.deserialize()?;
+ 1463|      0|    Ok((ret.raw_byte_power, ret.quality_adj_power))
+ 1464|      0|}
+ 1465|       |
+ 1466|       |impl ActorCode for Actor {
+ 1467|       |    fn invoke_method<BS, RT>(
+ 1468|       |        rt: &mut RT,
+ 1469|       |        method: MethodNum,
+ 1470|       |        params: &RawBytes,
+ 1471|       |    ) -> Result<RawBytes, ActorError>
+ 1472|       |    where
+ 1473|       |        BS: Blockstore,
+ 1474|       |        RT: Runtime<BS>,
+ 1475|       |    {
+ 1476|      1|        match FromPrimitive::from_u64(method) {
+ 1477|       |            Some(Method::Constructor) => {
+ 1478|      0|                Self::constructor(rt)?;
+ 1479|      0|                Ok(RawBytes::default())
+ 1480|       |            }
+ 1481|       |            Some(Method::AddBalance) => {
+ 1482|      0|                Self::add_balance(rt, rt.deserialize_params(params)?)?;
+ 1483|      0|                Ok(RawBytes::default())
+ 1484|       |            }
+ 1485|       |            Some(Method::WithdrawBalance) => {
+ 1486|      1|                let res = Self::withdraw_balance(rt, rt.deserialize_params(params)?)?;
+                                                                                                ^0^0
+ 1487|      1|                Ok(RawBytes::serialize(res)?)
+                                                         ^0
+ 1488|       |            }
+ 1489|       |            Some(Method::PublishStorageDeals) => {
+ 1490|      0|                let res = Self::publish_storage_deals(rt, rt.deserialize_params(params)?)?;
+ 1491|      0|                Ok(RawBytes::serialize(res)?)
+ 1492|       |            }
+ 1493|       |            Some(Method::VerifyDealsForActivation) => {
+ 1494|      0|                let res = Self::verify_deals_for_activation(rt, rt.deserialize_params(params)?)?;
+ 1495|      0|                Ok(RawBytes::serialize(res)?)
+ 1496|       |            }
+ 1497|       |            Some(Method::ActivateDeals) => {
+ 1498|      0|                Self::activate_deals(rt, rt.deserialize_params(params)?)?;
+ 1499|      0|                Ok(RawBytes::default())
+ 1500|       |            }
+ 1501|       |            Some(Method::OnMinerSectorsTerminate) => {
+ 1502|      0|                Self::on_miner_sectors_terminate(rt, rt.deserialize_params(params)?)?;
+ 1503|      0|                Ok(RawBytes::default())
+ 1504|       |            }
+ 1505|       |            Some(Method::ComputeDataCommitment) => {
+ 1506|      0|                let res = Self::compute_data_commitment(rt, rt.deserialize_params(params)?)?;
+ 1507|      0|                Ok(RawBytes::serialize(res)?)
+ 1508|       |            }
+ 1509|       |            Some(Method::CronTick) => {
+ 1510|      0|                Self::cron_tick(rt)?;
+ 1511|      0|                Ok(RawBytes::default())
+ 1512|       |            }
+ 1513|      0|            None => Err(actor_error!(SysErrInvalidMethod, "Invalid method")),
+ 1514|       |        }
+ 1515|      1|    }
+ 1516|       |}
+
