@@ -56,7 +56,15 @@ macro_rules! wasm_trampoline {
         #[no_mangle]
         #[cfg(feature = "runtime-wasm")]
         pub extern "C" fn invoke(param: u32) -> u32 {
-            $crate::runtime::fvm::trampoline::<$target>(param)
+            #[cfg(feature = "wasm-prof")]
+            $crate::runtime::fvm::prof::reset_coverage();
+
+            let ret = $crate::runtime::fvm::trampoline::<$target>(param);
+
+            #[cfg(feature = "wasm-prof")]
+            let _ = $crate::runtime::fvm::prof::capture_coverage();
+
+            ret
         }
     };
 }

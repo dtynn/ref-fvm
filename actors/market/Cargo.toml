@@ -29,8 +29,9 @@ default = []
 # This feature is set when building wasm
 runtime-wasm = ["actors-runtime/runtime-wasm"]
 
+wasm-prof = ["actors-runtime/wasm-prof"]
 
 [build-dependencies]
-wasm-builder = "3.0.1"
-
-
+wasm-builder = { git = "https://github.com/paritytech/substrate.git", rev = "0a92e3e", package = "substrate-wasm-builder" }
+# wasm-builder = { path = "/home/dtynn/proj/github.com/paritytech/substrate/utils/wasm-builder", package = "substrate-wasm-builder" }
+# wasm-builder = "3.0.1"

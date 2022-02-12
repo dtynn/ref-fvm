@@ -27,6 +27,8 @@ mod blockstore;
 mod market_actor;
 mod power_actor;
 
+pub use fvm_actor_market;
+
 #[derive(Clone)]
 pub struct Config {
     /// The maximum call depth.

@@ -12,6 +12,9 @@ pub mod sself;
 pub mod sys;
 pub mod vm;
 
+#[cfg(feature = "wasm-prof")]
+pub mod prof;
+
 /// The maximum supported CID size. (SPEC_AUDIT)
 pub const MAX_CID_LEN: usize = 100;
 

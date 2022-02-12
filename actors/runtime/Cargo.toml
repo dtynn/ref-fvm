@@ -41,6 +41,7 @@ default = []
 devnet = []
 interopnet = []
 test_utils = ["hex"]
+wasm-prof = ["fvm_sdk/wasm-prof"]
 
 # This feature is set when building wasm
 runtime-wasm = ["fvm_sdk"]

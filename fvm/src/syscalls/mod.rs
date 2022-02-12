@@ -19,6 +19,9 @@ mod send;
 mod sself;
 mod vm;
 
+#[cfg(feature = "wasm-prof")]
+mod prof;
+
 pub(self) use context::Context;
 
 /// Invocation data attached to a wasm "store" and available to the syscall binding.
@@ -115,6 +118,9 @@ pub fn bind_syscalls(
 
     linker.bind("debug", "log", debug::log)?;
     linker.bind("debug", "enabled", debug::enabled)?;
+
+    #[cfg(feature = "wasm-prof")]
+    linker.bind("prof", "capture_coverage", prof::capture_coverage)?;
 
     Ok(())
 }

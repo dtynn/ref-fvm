@@ -80,3 +80,6 @@ builtin_actors = [
     "fvm_actor_system",
     "fvm_actor_verifreg"
 ]
+wasm-prof = [
+    "fvm_actor_market/wasm-prof",
+]

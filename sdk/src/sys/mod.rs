@@ -11,6 +11,9 @@ pub mod send;
 pub mod sself;
 pub mod vm;
 
+#[cfg(feature = "wasm-prof")]
+pub mod prof;
+
 /// Generate a set of FVM syscall shims.
 ///
 /// ```ignore

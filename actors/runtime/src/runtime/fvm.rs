@@ -30,6 +30,9 @@ lazy_static! {
     };
 }
 
+#[cfg(feature = "wasm-prof")]
+pub use fvm::prof;
+
 /// A runtime that bridges to the FVM environment through the FVM SDK.
 pub struct FvmRuntime<B = ActorBlockstore> {
     blockstore: B,

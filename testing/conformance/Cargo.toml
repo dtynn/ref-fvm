@@ -44,6 +44,7 @@ ittapi-rs = { version = "0.1.6", optional = true }
 
 [features]
 vtune = ["wasmtime/vtune", "ittapi-rs"]
+wasm-prof = ["fvm/wasm-prof"]
 
 [dev-dependencies]
 pretty_env_logger = "0.4.0"
@@ -54,6 +55,12 @@ name = "perf-conformance"
 test = false
 bench = false
 required-features = ["vtune"]
+
+[[bin]]
+name = "coverage-conformance"
+test = false
+bench = false
+required-features = ["wasm-prof"]
 
 [[bench]]
 name = "bench_conformance"
